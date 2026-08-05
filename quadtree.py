@@ -17,10 +17,12 @@ class Box:
     V: list = dataclasses.field(default_factory=set)
     W: list = dataclasses.field(default_factory=set)
     X: list = dataclasses.field(default_factory=set)
-    Y: list = dataclasses.field(default_factory=set)
+    #Y: list = dataclasses.field(default_factory=set)
 
     centre: np.array = None
     multipole_expansion: np.array = dataclasses.field(default_factory=lambda:np.zeros(25, complex))
+    local_expansion: np.array = dataclasses.field(default_factory=lambda:np.zeros(25, complex))
+    forces: list = dataclasses.field(default_factory=list)
 
     def __repr__(self) -> str:
         parent_str = f"{self.ancestors[-1].root}x{self.ancestors[-1].extent}" if len(self.ancestors) != 0 else "None"
@@ -84,7 +86,7 @@ def colleagify_quadtree(box: Box):
     if box.child_boxes[1]:
         box.child_boxes[1].colleagues = [
             box.colleagues[0].child_boxes[0] if box.colleagues[0] and box.colleagues[0].has_child_boxes else box.colleagues[0],
-            box.colleagues[0].child_boxes[1] if box.colleagues[0] and box.colleagues[0].has_child_boxes else box.colleagues[0],
+            box.colleagues[0].child_boxes[2] if box.colleagues[0] and box.colleagues[0].has_child_boxes else box.colleagues[0],
             box.child_boxes[3],
             box.child_boxes[2],
             box.child_boxes[0],
@@ -149,40 +151,65 @@ def stratify_quadtree(root: Box) -> list:
         i += 1
     return strata
 
-def populate_list_1(strata: list):
-    i = len(strata) - 1
-    while i >= 0:
-        for box in strata[i]:
-            if not box.has_child_boxes:
-                box.U.update(filter(lambda b: b is not None, [colleague if colleague is not None and not colleague.has_child_boxes else None for colleague in box.colleagues]))
-                for cobox in box.U:
-                    cobox.U.update([box])
-        i -= 1
+def populate_list_1(leaves: list):
+    for box in leaves:
+        box.U.update(filter(lambda b: b is not None, [colleague if colleague is not None and not colleague.has_child_boxes else None for colleague in box.colleagues]))
+        for cobox in box.U:
+            cobox.U.update([box])
 
-def populate_list_2_and_5(strata: list):
+def populate_list_2(strata: list):
     i = 0
     while i < len(strata) - 1:
-        stratum = set(strata[i])
+        #stratum = set(strata[i])
         for box in strata[i]:
             if box.has_child_boxes:
                 colleague_children = sum([colleague.child_boxes if colleague is not None and colleague.has_child_boxes else [None] for colleague in box.colleagues], [])
-                set_colleagues = set(box.colleagues)
-                well_separated = stratum - set_colleagues
-                well_separated.remove(box)
+                #set_colleagues = set(box.colleagues)
+                #well_separated = stratum - set_colleagues
+                #well_separated.remove(box)
                 for child in box.child_boxes:
                     if child is not None:
                         child.V.update(filter(lambda b: b is not None and b not in child.U and b not in child.colleagues, colleague_children))
-                        child.Y.update(well_separated)
+                        #child.Y.update(well_separated)
         i += 1
 
-def populate_list_3_and_4(strata: list):
-    for stratum in strata:
-        for box in stratum:
-            if len(box.ancestors) != 0:
-                for colleague in box.ancestors[-1].colleagues:
-                    if colleague and not colleague.has_child_boxes and colleague not in box.U:
-                        box.W.update([colleague])
-                        colleague.X.update([box])
+def populate_list_3_and_4(leaves: list):
+    #for stratum in strata:
+    #    for box in stratum:
+    #        if len(box.ancestors) != 0:
+    #            for colleague in box.ancestors[-1].colleagues:
+    #                if colleague and not colleague.has_child_boxes and colleague not in box.U:
+    #                    box.X.update([colleague])
+    #                    colleague.W.update([box])
+    def W(X, box, qualifying: set):
+        l = []
+        for i, child in enumerate(box.child_boxes):
+            if child is None:
+                continue
+            if i in qualifying:
+                l.append(child)
+                child.X.update([X])
+            elif child.has_child_boxes:
+                l += W(X, child, qualifying)
+        return l
+    
+    for box in leaves:
+        if box.colleagues[0] is not None and box.colleagues[0].has_child_boxes:
+            box.W.update(W(box, box.colleagues[0], set([1, 3])))
+        if box.colleagues[1] is not None and box.colleagues[1].has_child_boxes:
+            box.W.update(W(box, box.colleagues[1], set([1, 2, 3])))
+        if box.colleagues[2] is not None and box.colleagues[2].has_child_boxes:
+            box.W.update(W(box, box.colleagues[2], set([2, 3])))
+        if box.colleagues[3] is not None and box.colleagues[3].has_child_boxes:
+            box.W.update(W(box, box.colleagues[3], set([0, 2, 3])))
+        if box.colleagues[4] is not None and box.colleagues[4].has_child_boxes:
+            box.W.update(W(box, box.colleagues[4], set([0, 2])))
+        if box.colleagues[5] is not None and box.colleagues[5].has_child_boxes:
+            box.W.update(W(box, box.colleagues[5], set([0, 1, 2])))
+        if box.colleagues[6] is not None and box.colleagues[6].has_child_boxes:
+            box.W.update(W(box, box.colleagues[6], set([0, 1])))
+        if box.colleagues[7] is not None and box.colleagues[7].has_child_boxes:
+            box.W.update(W(box, box.colleagues[7], set([0, 1, 3])))
 
 def leaves(strata: list):
     result_leaves = []
