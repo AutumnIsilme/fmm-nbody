@@ -239,32 +239,39 @@ def main(N=500):
 
 
     # Step 4
-    loops = 0
+    #loops = 0
     for stratum in strata[2:]:
         for box in stratum:
             for b_j in box.V:
-                loops += 1
+                #loops += 1
                 relative_centre = b_j.centre - box.centre
                 z_0 = complex(relative_centre[0], relative_centre[1])
-                a = b_j.multipole_expansion
+                #a = b_j.multipole_expansion
                 
-                box.local_expansion[0] += a[0] * np.log(-z_0)
                 recip_z_0 = 1/z_0
-                #neg_recip_z_0 = -1/z_0
+                neg_recip_z_0 = -1/z_0
                 #recip_z_0_k = 1
-                for k in range(1, p+1):
+                k = np.arange(1, p+1)
+                #for k in range(1, p+1):
                     #recip_z_0_k *= recip_z_0
-                    box.local_expansion[0] += a[k] * (-1)**k * recip_z_0**k
+                    #local_expansion += b_j.multipole_expansion[k] * (-1)**k * recip_z_0**k
+                box.local_expansion[0] += b_j.multipole_expansion[0] * np.log(-z_0) + np.sum(b_j.multipole_expansion[k] * np.power(neg_recip_z_0, k))
                 #recip_z_0_l = 1
-                for l in range(1, p+1):
+                l = np.arange(1, p+1)
+                K, L = np.meshgrid(l, k)
+
+                box.local_expansion[1:] += np.power(recip_z_0, l) * (-b_j.multipole_expansion[0] / l + np.sum(b_j.multipole_expansion[K] * np.power(neg_recip_z_0, K) * binom(L+K-1, K-1), axis=1))
+
+                #for l in range(1, p+1):
                     #recip_z_0_l *= recip_z_0
                     #recip_z_0_k = 1
-                    box.local_expansion[l] += -recip_z_0**l * a[0]/l
-                    for k in range(1, p+1):
+                    #box.local_expansion[l] += -recip_z_0**l * b_j.multipole_expansion[0]/l + recip_z_0**l * np.sum(b_j.multipole_expansion[k] * np.power(neg_recip_z_0, k) * binom(l+k-1, k-1))
+                    #box.local_expansion[l] += recip_z_0**l * np.sum(b_j.multipole_expansion[k] * np.power(neg_recip_z_0, k) * binom(l+k-1, k-1))
+                    #for k in range(1, p+1):
                         #recip_z_0_k *= recip_z_0
-                        box.local_expansion[l] += recip_z_0**l * (-1)**k * a[k] * recip_z_0**k * binom(l+k-1, k-1)
+                        #local_expansion += recip_z_0**l * (-1)**k * b_j.multipole_expansion[k] * recip_z_0**k * binom(l+k-1, k-1)
 
-    print(f"loops: {loops}")
+    #print(f"loops: {loops}")
 
     step_4 = time.time()
 
