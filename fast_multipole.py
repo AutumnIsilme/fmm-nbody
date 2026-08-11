@@ -27,7 +27,7 @@ def basic(N):
             mass_product = left[-1] * right[-1]
             force = left_to_right * mass_product / norm**2
             box.forces[i] += force
-            box.forces[j] -= force
+            box.forces[i + 1 + j] -= force
 
     done = time.time()
     print(f"Total time: {done - start}")
@@ -207,10 +207,12 @@ def main(N=500):
     '''
 
     # Step 3
+    for leaf in leaves: # Initialise forces on a leaf only once, not every time it is visited
+        leaf.forces = np.zeros((len(leaf.bodies_in_box), 2))
+
     for leaf in leaves:
         leaf.forces = np.zeros((len(leaf.bodies_in_box), 2))
         for adjacent in leaf.U:
-            adjacent.forces = np.zeros((len(adjacent.bodies_in_box), 2))
             for i, left in enumerate(leaf.bodies_in_box):
                 for j, right in enumerate(adjacent.bodies_in_box):
                     left_pos = left[:2]
@@ -233,7 +235,7 @@ def main(N=500):
                 mass_product = left[-1] * right[-1]
                 force = left_to_right * mass_product / norm**2
                 leaf.forces[i] += force
-                leaf.forces[j] -= force
+                leaf.forces[j + i + 1] -= force # j starts at index 0, not i + 1
 
     step_3 = time.time()
 
