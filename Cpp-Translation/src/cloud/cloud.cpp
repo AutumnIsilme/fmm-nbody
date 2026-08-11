@@ -1,3 +1,5 @@
+#include "../../include/cloud/Cloud.h"
+
 #include <fstream>
 #include <random>
 #include <string>
