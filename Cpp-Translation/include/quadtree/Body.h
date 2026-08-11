@@ -20,6 +20,7 @@ public:
   double y() const;
 
   // Returns 0.0 if no charge/mass column was supplied.
+  double mass() const;
   double charge() const;
 
   std::array<double, 2> position() const;

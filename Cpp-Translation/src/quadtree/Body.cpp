@@ -22,7 +22,9 @@ double Body::x() const { return data[0]; }
 
 double Body::y() const { return data[1]; }
 
-double Body::charge() const { return data.size() > 2 ? data[2] : 0.0; }
+double Body::mass() const { return data.size() > 2 ? data.back() : 0.0; }
+
+double Body::charge() const { return mass(); }
 
 std::array<double, 2> Body::position() const { return {data[0], data[1]}; }
 
