@@ -8,7 +8,6 @@ namespace fmm {
 
 class Body {
 public:
-  // Raw row of data: [x, y, charge/mass, ...]. Mirrors a numpy row.
   std::vector<double> data;
 
   Body();
