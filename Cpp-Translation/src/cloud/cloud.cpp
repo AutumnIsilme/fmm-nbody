@@ -7,6 +7,8 @@
 
 using namespace std;
 
+namespace fmm {
+
 vector<string> lines(const vector<vector<double>> &bodies) {
   vector<string> result;
 
@@ -28,23 +30,24 @@ void write_points_and_masses(const vector<vector<double>> &bodies,
   }
 }
 
-vector<vector<double>>
-generate_points_and_masses_uniform_random_distribution(int n_points,
-                                                       double max_mass) {
-  vector<vector<double>> data;
-
-  random_device rd;
-  mt19937 gen(rd());
-  uniform_real_distribution<double> random(0.0, 1.0);
-
-  for (int i = 0; i < n_points; i++) {
-    data.push_back({random(gen) * 2 - 1, random(gen) * 2 - 1,
-                    random(gen) * 2 - 1, 0.0, 0.0, 0.0,
-                    random(gen) * max_mass});
-  }
-
-  return data;
-}
+// i believe this is dead code for a 3D version?
+// vector<vector<double>>
+// generate_points_and_masses_uniform_random_distribution(int n_points,
+//                                                        double max_mass) {
+//   vector<vector<double>> data;
+//
+//   random_device rd;
+//   mt19937 gen(rd());
+//   uniform_real_distribution<double> random(0.0, 1.0);
+//
+//   for (int i = 0; i < n_points; i++) {
+//     data.push_back({random(gen) * 2 - 1, random(gen) * 2 - 1,
+//                     random(gen) * 2 - 1, 0.0, 0.0, 0.0,
+//                     random(gen) * max_mass});
+//   }
+//
+//   return data;
+// }
 
 vector<vector<double>> generate_2d_bodies_uniform_random(int n_points,
                                                          double max_mass) {
@@ -61,3 +64,4 @@ vector<vector<double>> generate_2d_bodies_uniform_random(int n_points,
 
   return data;
 }
+} // namespace fmm

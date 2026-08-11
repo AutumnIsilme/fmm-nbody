@@ -90,7 +90,7 @@ void basic(int N) {
   auto start = Clock::now();
 
   std::vector<Body> bodies =
-      bodies_from_rows(generate_2d_bodies_uniform_random(N, 10.0));
+      bodies_from_rows(fmm::generate_2d_bodies_uniform_random(N, 10.0));
 
   Box box(Vec2(-1.0, -1.0), 2.0);
   box.bodies_in_box = bodies;
