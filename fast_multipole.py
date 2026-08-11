@@ -49,7 +49,7 @@ def main(N=500):
     populated = time.time()
 
     '''
-    # Debug: Pick a leaf and draw it's lists
+    # Debug: Pick a leaf and draw its lists
     def plot_lists(box, ax):
         if box.has_child_boxes:
             for colleague in box.colleagues:
