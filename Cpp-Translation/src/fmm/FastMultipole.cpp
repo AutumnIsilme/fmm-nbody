@@ -48,17 +48,17 @@ void accumulate_cross_pairwise_forces(const std::vector<Body> &left_bodies,
   }
 }
 
-void accumulate_self_pairwise_forces_as_written(const std::vector<Body> &bodies,
-                                                std::vector<Vec2> &forces) {
+void accumulate_self_pairwise_forces(const std::vector<Body> &bodies,
+                                     std::vector<Vec2> &forces) {
   if (bodies.empty())
     return;
   for (std::size_t i = 0; i + 1 < bodies.size(); ++i) {
-    for (std::size_t j = 0; j < bodies.size() - (i + 1); ++j) {
+    for (std::size_t j = i + 1; j < bodies.size(); ++j) {
       const Body &left = bodies[i];
-      const Body &right = bodies[i + 1 + j];
+      const Body &right = bodies[j];
       Vec2 force = pairwise_force(left, right);
       forces[i] = forces[i] + force;
-      forces[i + 1 + j] = forces[i + 1 + j] - force;
+      forces[j] = forces[j] - force;
     }
   }
 }
@@ -98,7 +98,7 @@ void basic(int N) {
 
   auto constructed = Clock::now();
 
-  accumulate_self_pairwise_forces_as_written(box.bodies_in_box, box.forces);
+  accumulate_self_pairwise_forces(box.bodies_in_box, box.forces);
 
   auto done = Clock::now();
 
@@ -133,10 +133,7 @@ void run_fmm(int N, int bodies_per_box, double epsilon) {
         "run_fmm: epsilon requires p=" + std::to_string(p) +
         " expansion terms, exceeding the fixed Box array size "
         "(kExpansionTerms=" +
-        std::to_string(kExpansionTerms) +
-        "). Python's equivalent (a fixed-size-25 numpy array) "
-        "would raise an IndexError here; use an epsilon >= 1e-7 or resize "
-        "kExpansionTerms in Box.h.");
+        std::to_string(kExpansionTerms) + ").");
   }
 
   // --- Step 2.1: P2M (multipole expansion of each leaf's own bodies) ---
@@ -157,7 +154,7 @@ void run_fmm(int N, int bodies_per_box, double epsilon) {
 
   auto step_2_1 = Clock::now();
 
-  // --- Step 2.2: M2M (upward pass, strata[-2:1:-1] i.e. size-2 .. 2 inclusive)
+  // --- Step 2.2: M2M
   for (int i = static_cast<int>(strata.size()) - 2; i >= 2; --i) {
     for (Box *box : strata[static_cast<std::size_t>(i)]) {
       if (!box->has_child_boxes)
@@ -186,9 +183,6 @@ void run_fmm(int N, int bodies_per_box, double epsilon) {
   auto step_2_2 = Clock::now();
 
   // --- Step 3: near field, direct pairwise via U list, plus leaf
-  // self-interaction --- See the KNOWN BUG note at the top of this file for
-  // both the adjacent->forces reset-on-every-visit behaviour and the
-  // self-interaction indexing bug, both reproduced faithfully.
 
   // Zero-init forces on every leaf
   for (Box *leaf : leaf_boxes) {
@@ -196,17 +190,13 @@ void run_fmm(int N, int bodies_per_box, double epsilon) {
   }
 
   for (Box *leaf : leaf_boxes) {
-    std::vector<Box *> adjacents(leaf->U.begin(), leaf->U.end());
-    for (Box *adjacent : adjacents) {
-      adjacent->forces.assign(adjacent->bodies_in_box.size(),
-                              Vec2(0.0, 0.0)); // faithful reset, see note above
+    for (Box *adjacent : leaf->U) {
       accumulate_cross_pairwise_forces(leaf->bodies_in_box, leaf->forces,
                                        adjacent->bodies_in_box,
                                        adjacent->forces);
       adjacent->U.erase(leaf);
     }
-    accumulate_self_pairwise_forces_as_written(leaf->bodies_in_box,
-                                               leaf->forces);
+    accumulate_self_pairwise_forces(leaf->bodies_in_box, leaf->forces);
   }
 
   auto step_3 = Clock::now();

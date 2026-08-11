@@ -11,7 +11,6 @@ namespace fmm {
 std::vector<Body>
 bodies_from_rows(const std::vector<std::vector<double>> &rows);
 
-// This is the force ON `right` FROM `left`
 Vec2 pairwise_force(const Body &left, const Body &right);
 
 void basic(int N);
