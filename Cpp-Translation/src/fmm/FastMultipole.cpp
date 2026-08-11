@@ -35,6 +35,10 @@ double binomial(int n, int k) {
   return result;
 }
 
+// ensures that if particles come close to one another the numbers do not blow
+// up unreasonably
+constexpr double kSofteningSquared = 1e-6;
+
 void accumulate_cross_pairwise_forces(const std::vector<Body> &left_bodies,
                                       std::vector<Vec2> &left_forces,
                                       const std::vector<Body> &right_bodies,
@@ -63,6 +67,19 @@ void accumulate_self_pairwise_forces(const std::vector<Body> &bodies,
   }
 }
 
+// Allow for multiple steps by clearing tree
+void reset_expansions(Strata &strata) {
+  for (auto &level : strata) {
+    for (Box *box : level) {
+      std::fill(std::begin(box->multipole_expansion),
+                std::end(box->multipole_expansion),
+                std::complex<double>(0.0, 0.0));
+      std::fill(std::begin(box->local_expansion),
+                std::end(box->local_expansion), std::complex<double>(0.0, 0.0));
+    }
+  }
+}
+
 } // namespace
 
 std::vector<Body>
@@ -75,15 +92,15 @@ bodies_from_rows(const std::vector<std::vector<double>> &rows) {
   return result;
 }
 
+// I added a softening factor in here
 Vec2 pairwise_force(const Body &left, const Body &right) {
   double dx = right.x() - left.x();
   double dy = right.y() - left.y();
-  double norm = std::sqrt(dx * dx + dy * dy);
-  double ux = dx / norm;
-  double uy = dy / norm;
+  double norm_sq = dx * dx + dy * dy + kSofteningSquared;
+  double denom = norm_sq * std::sqrt(norm_sq); // (r^2 + eps^2)^{3/2}
   double mass_product = left.mass() * right.mass();
-  double scale = mass_product / (norm * norm);
-  return Vec2(ux * scale, uy * scale);
+  double scale_factor = mass_product / denom;
+  return Vec2(dx * scale_factor, dy * scale_factor);
 }
 
 void basic(int N) {
@@ -111,30 +128,19 @@ void basic(int N) {
             << "\n";
 }
 
-void run_fmm(int N, int bodies_per_box, double epsilon) {
-  auto start = Clock::now();
-
-  std::vector<Body> bodies =
-      bodies_from_rows(generate_2d_bodies_uniform_random(N, 10.0));
-  std::unique_ptr<Box> bodies_tree =
-      create_quadtree(bodies, static_cast<std::size_t>(bodies_per_box));
-  Strata strata = stratify_quadtree(*bodies_tree);
-  std::vector<Box *> leaf_boxes = leaves(strata);
-  populate_list_1(leaf_boxes);
-  populate_list_2(strata);
-  populate_list_3_and_4(leaf_boxes);
-
-  auto populated = Clock::now();
-
+// steps 2.1 through to 8 in their own function
+void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
+                      double epsilon) {
   int p = static_cast<int>(std::ceil(-std::log2(epsilon)));
-  std::cout << "p: " << p << "\n";
   if (p + 1 > kExpansionTerms) {
     throw std::runtime_error(
-        "run_fmm: epsilon requires p=" + std::to_string(p) +
+        "solve_fmm_forces: epsilon requires p=" + std::to_string(p) +
         " expansion terms, exceeding the fixed Box array size "
         "(kExpansionTerms=" +
         std::to_string(kExpansionTerms) + ").");
   }
+
+  reset_expansions(strata);
 
   // --- Step 2.1: P2M (multipole expansion of each leaf's own bodies) ---
   for (Box *leaf : leaf_boxes) {
@@ -152,9 +158,7 @@ void run_fmm(int N, int bodies_per_box, double epsilon) {
     }
   }
 
-  auto step_2_1 = Clock::now();
-
-  // --- Step 2.2: M2M
+  // --- Step 2.2: M2M ---
   for (int i = static_cast<int>(strata.size()) - 2; i >= 2; --i) {
     for (Box *box : strata[static_cast<std::size_t>(i)]) {
       if (!box->has_child_boxes)
@@ -180,26 +184,24 @@ void run_fmm(int N, int bodies_per_box, double epsilon) {
     }
   }
 
-  auto step_2_2 = Clock::now();
-
-  // --- Step 3: near field, direct pairwise via U list, plus leaf
+  // --- Step 3: near field, direct pairwise via U list, plus leaf self ---
 
   // Zero-init forces on every leaf
   for (Box *leaf : leaf_boxes) {
     leaf->forces.assign(leaf->bodies_in_box.size(), Vec2(0.0, 0.0));
   }
 
+  std::less<Box *> box_order;
   for (Box *leaf : leaf_boxes) {
     for (Box *adjacent : leaf->U) {
+      if (!box_order(leaf, adjacent))
+        continue; // wait for the other side of the pair to process it
       accumulate_cross_pairwise_forces(leaf->bodies_in_box, leaf->forces,
                                        adjacent->bodies_in_box,
                                        adjacent->forces);
-      adjacent->U.erase(leaf);
     }
     accumulate_self_pairwise_forces(leaf->bodies_in_box, leaf->forces);
   }
-
-  auto step_3 = Clock::now();
 
   // --- Step 4: M2L (V list -> local expansion) ---
   for (std::size_t i = 2; i < strata.size(); ++i) {
@@ -236,10 +238,7 @@ void run_fmm(int N, int bodies_per_box, double epsilon) {
     }
   }
 
-  auto step_4 = Clock::now();
-
-  // --- Step 5: W list, direct multipole evaluation added straight into leaf
-  // forces ---
+  // --- Step 5: W list, direct multipole evaluation added into leaf forces --
   for (Box *leaf : leaf_boxes) {
     for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
       const Body &body = leaf->bodies_in_box[i];
@@ -259,8 +258,6 @@ void run_fmm(int N, int bodies_per_box, double epsilon) {
       }
     }
   }
-
-  auto step_5 = Clock::now();
 
   // --- Step 6: P2L (X list -> local expansion, direct body evaluation) ---
   for (std::size_t i = 2; i < strata.size(); ++i) {
@@ -282,8 +279,6 @@ void run_fmm(int N, int bodies_per_box, double epsilon) {
       }
     }
   }
-
-  auto step_6 = Clock::now();
 
   // --- Step 7: L2L (downward pass, local expansion shift) ---
   for (std::size_t i = 2; i < strata.size(); ++i) {
@@ -308,9 +303,7 @@ void run_fmm(int N, int bodies_per_box, double epsilon) {
     }
   }
 
-  auto step_7 = Clock::now();
-
-  // --- Step 8: evaluate local expansion at each leaf body, add to forces ---
+  // --- Step 8: evaluate local expansion at each leaf body, add to forces --
   for (Box *leaf : leaf_boxes) {
     std::complex<double> centre(leaf->centre.x, leaf->centre.y);
     for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
@@ -326,32 +319,81 @@ void run_fmm(int N, int bodies_per_box, double epsilon) {
       leaf->forces[i] = leaf->forces[i] + Vec2(force.real(), force.imag());
     }
   }
+}
 
-  auto step_8 = Clock::now();
-  auto end = Clock::now();
+void run_fmm(int N, int bodies_per_box, double epsilon) {
+  auto start = Clock::now();
+
+  std::vector<Body> bodies =
+      bodies_from_rows(generate_2d_bodies_uniform_random(N, 10.0));
+  std::unique_ptr<Box> bodies_tree =
+      create_quadtree(bodies, static_cast<std::size_t>(bodies_per_box));
+  Strata strata = stratify_quadtree(*bodies_tree);
+  std::vector<Box *> leaf_boxes = leaves(strata);
+  populate_list_1(leaf_boxes);
+  populate_list_2(strata);
+  populate_list_3_and_4(leaf_boxes);
+
+  auto populated = Clock::now();
+
+  solve_fmm_forces(strata, leaf_boxes, epsilon);
+
+  auto solved = Clock::now();
 
   std::cout << "Total time: " << seconds_since(start) << "\n";
-  std::cout << "Step 1: "
+  std::cout << "Tree build + interaction lists: "
             << std::chrono::duration<double>(populated - start).count() << "\n";
-  std::cout << "Step 2.1: "
-            << std::chrono::duration<double>(step_2_1 - populated).count()
+  std::cout << "Force solve (steps 2.1-8): "
+            << std::chrono::duration<double>(solved - populated).count()
             << "\n";
-  std::cout << "Step 2.2: "
-            << std::chrono::duration<double>(step_2_2 - step_2_1).count()
-            << "\n";
-  std::cout << "Step 3: "
-            << std::chrono::duration<double>(step_3 - step_2_2).count() << "\n";
-  std::cout << "Step 4: "
-            << std::chrono::duration<double>(step_4 - step_3).count() << "\n";
-  std::cout << "Step 5: "
-            << std::chrono::duration<double>(step_5 - step_4).count() << "\n";
-  std::cout << "Step 6: "
-            << std::chrono::duration<double>(step_6 - step_5).count() << "\n";
-  std::cout << "Step 7: "
-            << std::chrono::duration<double>(step_7 - step_6).count() << "\n";
-  std::cout << "Step 8: "
-            << std::chrono::duration<double>(step_8 - step_7).count() << "\n";
-  (void)end;
+}
+
+void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
+                        int num_steps, double dt) {
+  auto start = Clock::now();
+
+  std::vector<Body> bodies =
+      bodies_from_rows(generate_2d_bodies_uniform_random(N, 10.0));
+
+  for (std::size_t i = 0; i < bodies.size(); ++i) {
+    bodies[i].id = i;
+  }
+
+  std::unique_ptr<Box> bodies_tree =
+      create_quadtree(bodies, static_cast<std::size_t>(bodies_per_box));
+  Strata strata = stratify_quadtree(*bodies_tree);
+  std::vector<Box *> leaf_boxes = leaves(strata);
+  populate_list_1(leaf_boxes);
+  populate_list_2(strata);
+  populate_list_3_and_4(leaf_boxes);
+
+  std::vector<Vec2> velocities(static_cast<std::size_t>(N), Vec2(0.0, 0.0));
+
+  std::vector<double> masses(static_cast<std::size_t>(N), 0.0);
+  for (Box *leaf : leaf_boxes) {
+    for (const Body &body : leaf->bodies_in_box) {
+      masses[body.id] = body.mass();
+    }
+  }
+
+  for (int step = 0; step < num_steps; ++step) {
+    solve_fmm_forces(strata, leaf_boxes, epsilon);
+
+    for (Box *leaf : leaf_boxes) {
+      for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
+        Body &body = leaf->bodies_in_box[i];
+        std::size_t id = body.id;
+
+        Vec2 accel = scale(leaf->forces[i], 1.0 / masses[id]);
+        velocities[id] = velocities[id] + scale(accel, dt); // kick
+        Vec2 displacement = scale(velocities[id], dt);      // drift
+        body.set_position(body.x() + displacement.x, body.y() + displacement.y);
+      }
+    }
+  }
+
+  std::cout << "Total simulation time (" << num_steps
+            << " steps): " << seconds_since(start) << "\n";
 }
 
 } // namespace fmm
