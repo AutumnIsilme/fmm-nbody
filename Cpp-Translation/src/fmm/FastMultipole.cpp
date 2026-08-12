@@ -148,9 +148,11 @@ Vec2 pairwise_force(const Body &left, const Body &right) {
   double dx = right.x() - left.x();
   double dy = right.y() - left.y();
   double norm_sq = dx * dx + dy * dy + SimConstants::kSofteningSquared;
-  double denom = norm_sq * std::sqrt(norm_sq); // (r^2 + eps^2)^{3/2}
+
+  // 2D gravity denominator: norm_sq is (r^2 + eps^2)
   double mass_product = left.mass() * right.mass();
-  double scale_factor = mass_product / denom;
+  double scale_factor = mass_product / norm_sq; // Removed std::sqrt!
+
   return Vec2(dx * scale_factor, dy * scale_factor);
 }
 
@@ -221,7 +223,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                                  child->centre.y - box->centre.y);
         box->multipole_expansion[0] += child->multipole_expansion[0];
         for (int l = 1; l <= p; ++l) {
-          for (int k = 1; k <= l - 1; ++k) {
+          for (int k = 1; k <= l; ++k) {
             box->multipole_expansion[static_cast<std::size_t>(l)] +=
                 child->multipole_expansion[static_cast<std::size_t>(k)] *
                 std::pow(z_0, l - k) * binomial(l - 1, k - 1);
@@ -304,7 +306,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                    box->multipole_expansion[static_cast<std::size_t>(k)] *
                    inv_rel_pow;
         }
-        leaf->forces[i] = leaf->forces[i] + Vec2(force.real(), force.imag());
+        leaf->forces[i] = leaf->forces[i] + Vec2(-force.real(), force.imag());
       }
     }
   }
@@ -318,7 +320,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
       for (Box *big_leaf : box->X) {
         for (const Body &body : big_leaf->bodies_in_box) {
           std::complex<double> z =
-              centre - std::complex<double>(body.x(), body.y());
+              std::complex<double>(body.x(), body.y()) - centre;
           double mass = body.mass();
           box->local_expansion[0] += mass * std::log(-z);
           for (int l = 1; l <= p; ++l) {
@@ -366,7 +368,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                  leaf->local_expansion[static_cast<std::size_t>(l)] *
                  std::pow(z, l - 1);
       }
-      leaf->forces[i] = leaf->forces[i] + Vec2(force.real(), force.imag());
+      leaf->forces[i] = leaf->forces[i] + Vec2(-force.real(), force.imag());
     }
   }
 }
