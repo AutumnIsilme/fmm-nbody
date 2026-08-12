@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
 
   fmm::run_fmm(N, bodies_per_box, epsilon);
   LiveViewSettings live;
-  live.output_path = "live/live.svg";
+  live.output_path = "live.svg";
   live.frame_stride = 1;
   fmm::run_fmm_simulation(N, bodies_per_box, epsilon, 100000, 1e-3, 10, &live);
 
