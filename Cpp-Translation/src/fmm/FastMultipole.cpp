@@ -1,16 +1,22 @@
 #include "../../include/fmm/FastMultipole.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <complex>
+#include <filesystem>
 #include <iostream>
+#include <memory>
 #include <stdexcept>
+#include <string>
 
 #include "../../include/cloud/Cloud.h"
+#include "../../include/live_view/LiveSettings.h"
 #include "../../include/quadtree/Colleagues.h"
 #include "../../include/quadtree/InteractionLists.h"
 #include "../../include/quadtree/QuadtreeBuilder.h"
 #include "../../include/quadtree/Strata.h"
+#include "../../include/quadtree/Visualisation.h"
 
 namespace fmm {
 
@@ -35,8 +41,8 @@ double binomial(int n, int k) {
   return result;
 }
 
-// ensures that if particles come close to one another the numbers do not blow
-// up unreasonably
+// I saw a post saying this was sensible for more than one time step to reduce
+// things blowing up
 constexpr double kSofteningSquared = 1e-6;
 
 void accumulate_cross_pairwise_forces(const std::vector<Body> &left_bodies,
@@ -80,6 +86,30 @@ void reset_expansions(Strata &strata) {
   }
 }
 
+class LiveWriter {
+public:
+  LiveWriter(std::string path, std::string box_colour,
+             std::string particle_colour)
+      : path_(std::move(path)), tmp_path_(path_ + ".tmp"),
+        box_colour_(std::move(box_colour)),
+        particle_colour_(std::move(particle_colour)) {
+    auto parent = std::filesystem::path(path_).parent_path();
+    if (!parent.empty()) {
+      std::filesystem::create_directories(parent);
+    }
+  }
+
+  void write(const Box &root) {
+    graph_quadtree(root, tmp_path_, box_colour_, particle_colour_);
+    std::filesystem::rename(tmp_path_, path_);
+  }
+
+private:
+  std::string path_;
+  std::string tmp_path_;
+  std::string box_colour_;
+  std::string particle_colour_;
+};
 } // namespace
 
 std::vector<Body>
@@ -128,7 +158,6 @@ void basic(int N) {
             << "\n";
 }
 
-// steps 2.1 through to 8 in their own function
 void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                       double epsilon) {
   int p = static_cast<int>(std::ceil(-std::log2(epsilon)));
@@ -142,7 +171,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
 
   reset_expansions(strata);
 
-  // --- Step 2.1: P2M (multipole expansion of each leaf's own bodies) ---
+  // --- Step 2.1 ---
   for (Box *leaf : leaf_boxes) {
     for (const Body &body : leaf->bodies_in_box) {
       std::complex<double> z_i(body.x() - leaf->centre.x,
@@ -158,7 +187,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
     }
   }
 
-  // --- Step 2.2: M2M ---
+  // --- Step 2.2 ---
   for (int i = static_cast<int>(strata.size()) - 2; i >= 2; --i) {
     for (Box *box : strata[static_cast<std::size_t>(i)]) {
       if (!box->has_child_boxes)
@@ -184,7 +213,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
     }
   }
 
-  // --- Step 3: near field, direct pairwise via U list, plus leaf self ---
+  // --- Step 3 ---
 
   // Zero-init forces on every leaf
   for (Box *leaf : leaf_boxes) {
@@ -203,7 +232,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
     accumulate_self_pairwise_forces(leaf->bodies_in_box, leaf->forces);
   }
 
-  // --- Step 4: M2L (V list -> local expansion) ---
+  // --- Step 4 ---
   for (std::size_t i = 2; i < strata.size(); ++i) {
     for (Box *box : strata[i]) {
       for (Box *b_j : box->V) {
@@ -238,7 +267,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
     }
   }
 
-  // --- Step 5: W list, direct multipole evaluation added into leaf forces --
+  // --- Step 5 ---
   for (Box *leaf : leaf_boxes) {
     for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
       const Body &body = leaf->bodies_in_box[i];
@@ -259,7 +288,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
     }
   }
 
-  // --- Step 6: P2L (X list -> local expansion, direct body evaluation) ---
+  // --- Step 6 ---
   for (std::size_t i = 2; i < strata.size(); ++i) {
     for (Box *box : strata[i]) {
       if (box->X.empty())
@@ -280,7 +309,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
     }
   }
 
-  // --- Step 7: L2L (downward pass, local expansion shift) ---
+  // --- Step 7 ---
   for (std::size_t i = 2; i < strata.size(); ++i) {
     for (Box *box : strata[i]) {
       if (!box->has_child_boxes)
@@ -303,7 +332,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
     }
   }
 
-  // --- Step 8: evaluate local expansion at each leaf body, add to forces --
+  // --- Step 8 ---
   for (Box *leaf : leaf_boxes) {
     std::complex<double> centre(leaf->centre.x, leaf->centre.y);
     for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
@@ -348,8 +377,20 @@ void run_fmm(int N, int bodies_per_box, double epsilon) {
             << "\n";
 }
 
+// Each step:
+//   1. solve_fmm_forces on the current tree
+//   2. kick-drift: v += (F/m)*dt, then x += v*dt
+//   3. draw a frame
+//   4. rebuild the tree once `rebuild_every` steps have passed since the
+//      last rebuild
 void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
-                        int num_steps, double dt) {
+                        int num_steps, double dt, int rebuild_every,
+                        const LiveViewSettings *live_view) {
+  if (rebuild_every <= 0) {
+    throw std::invalid_argument(
+        "run_fmm_simulation: rebuild_every must be positive");
+  }
+
   auto start = Clock::now();
 
   std::vector<Body> bodies =
@@ -376,6 +417,36 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
     }
   }
 
+  // rebuild tree based on new particle locations
+  auto rebuild_tree = [&]() {
+    std::vector<Body> flat_bodies;
+    flat_bodies.reserve(static_cast<std::size_t>(N));
+    for (Box *leaf : leaf_boxes) {
+      for (const Body &body : leaf->bodies_in_box) {
+        flat_bodies.push_back(body);
+      }
+    }
+    bodies_tree =
+        create_quadtree(flat_bodies, static_cast<std::size_t>(bodies_per_box));
+    strata = stratify_quadtree(*bodies_tree);
+    leaf_boxes = leaves(strata);
+    populate_list_1(leaf_boxes);
+    populate_list_2(strata);
+    populate_list_3_and_4(leaf_boxes);
+  };
+
+  // animations
+  std::unique_ptr<LiveWriter> live_writer;
+  if (live_view != nullptr) {
+    live_writer = std::make_unique<LiveWriter>(live_view->output_path,
+                                               live_view->box_colour,
+                                               live_view->particle_colour);
+    live_writer->write(*bodies_tree); // initial configuration, t = 0
+  }
+
+  int steps_since_rebuild = 0;
+  int steps_since_live = 0;
+
   for (int step = 0; step < num_steps; ++step) {
     solve_fmm_forces(strata, leaf_boxes, epsilon);
 
@@ -384,11 +455,23 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
         Body &body = leaf->bodies_in_box[i];
         std::size_t id = body.id;
 
-        Vec2 accel = scale(leaf->forces[i], 1.0 / masses[id]);
-        velocities[id] = velocities[id] + scale(accel, dt); // kick
-        Vec2 displacement = scale(velocities[id], dt);      // drift
+        Vec2 accel = leaf->forces[i] * (1.0 / masses[id]);
+        velocities[id] = velocities[id] + (accel * dt); // kick
+        Vec2 displacement = velocities[id] * dt;        // drift
         body.set_position(body.x() + displacement.x, body.y() + displacement.y);
       }
+    }
+
+    ++steps_since_live;
+    if (live_writer != nullptr && steps_since_live >= live_view->frame_stride) {
+      live_writer->write(*bodies_tree);
+      steps_since_live = 0;
+    }
+
+    ++steps_since_rebuild;
+    if (steps_since_rebuild >= rebuild_every) {
+      rebuild_tree();
+      steps_since_rebuild = 0;
     }
   }
 
