@@ -18,6 +18,117 @@
 #include "../../include/quadtree/Strata.h"
 #include "../../include/quadtree/Visualisation.h"
 
+// --- Helper function to log iteration state --- TODO remove
+#include <algorithm>
+#include <cmath>
+#include <iomanip>
+#include <iostream>
+#include <vector>
+
+void log_step_diagnostics(int step, double current_time,
+                          const std::vector<fmm::Body> &bodies,
+                          const std::vector<fmm::Vec2> &velocities,
+                          const std::vector<fmm::Vec2> &forces, double eps_sq,
+                          std::ostream &out = std::cout) {
+  if (bodies.empty())
+    return;
+
+  const double G = 1.0;
+
+  double total_mass = 0.0;
+  double cm_x = 0.0, cm_y = 0.0;
+  double px = 0.0, py = 0.0;
+  double angular_momentum_z = 0.0;
+  double kinetic_energy = 0.0;
+  double potential_energy = 0.0;
+
+  double max_force_mag = 0.0;
+  double max_speed = 0.0;
+
+  // --- 1. Single-Body Accumulations ---
+  for (size_t i = 0; i < bodies.size(); ++i) {
+    const auto &b = bodies[i];
+    double m = b.mass();
+    double x = b.x();
+    double y = b.y();
+
+    // Access velocity and force from their respective vectors
+    // Adjust .x() vs .x if your Vec2 uses functions instead of public members
+    double vx = velocities[i].x;
+    double vy = velocities[i].y;
+    double fx = forces[i].x;
+    double fy = forces[i].y;
+
+    total_mass += m;
+    cm_x += m * x;
+    cm_y += m * y;
+
+    px += m * vx;
+    py += m * vy;
+
+    // Angular momentum in 2D: L_z = m * (x * v_y - y * v_x)
+    angular_momentum_z += m * (x * vy - y * vx);
+
+    // Kinetic Energy: 0.5 * m * v^2
+    double speed_sq = vx * vx + vy * vy;
+    kinetic_energy += 0.5 * m * speed_sq;
+
+    double force_mag = std::sqrt(fx * fx + fy * fy);
+    max_force_mag = std::max(max_force_mag, force_mag);
+    max_speed = std::max(max_speed, std::sqrt(speed_sq));
+  }
+
+  if (total_mass > 0.0) {
+    cm_x /= total_mass;
+    cm_y /= total_mass;
+  }
+
+  // --- 2. Pairwise Potential Energy (Exact 2D Log-Kernel) ---
+  // PE_ij = 0.5 * G * m_i * m_j * ln(r^2 + eps^2)
+  for (size_t i = 0; i + 1 < bodies.size(); ++i) {
+    for (size_t j = i + 1; j < bodies.size(); ++j) {
+      double dx = bodies[j].x() - bodies[i].x();
+      double dy = bodies[j].y() - bodies[i].y();
+      double r2_soft = dx * dx + dy * dy + eps_sq;
+
+      potential_energy +=
+          0.5 * G * bodies[i].mass() * bodies[j].mass() * std::log(r2_soft);
+    }
+  }
+
+  double total_energy = kinetic_energy + potential_energy;
+
+  // --- 3. Structured Printout ---
+  out << "==================== STEP " << step << " (t = " << std::fixed
+      << std::setprecision(4) << current_time << ") ====================\n";
+  out << std::scientific << std::setprecision(6);
+  out << "Total Mass      : " << total_mass << "\n";
+  out << "Center of Mass  : (" << cm_x << ", " << cm_y << ")\n";
+  out << "Linear Momentum : (" << px << ", " << py
+      << ")  [|P| = " << std::sqrt(px * px + py * py) << "]\n";
+  out << "Angular Mom (L) : " << angular_momentum_z << "\n";
+  out << "Kinetic Energy  : " << kinetic_energy << "\n";
+  out << "Potential Energy: " << potential_energy << "\n";
+  out << "Total Energy    : " << total_energy << "\n";
+  out << "Max Speed       : " << max_speed << "\n";
+  out << "Max Force Mag   : " << max_force_mag << "\n";
+
+  // Sample Tracking for inspection
+  out << "--- Sample Body 0 State ---\n";
+  out << "  pos: (" << bodies[0].x() << ", " << bodies[0].y() << ")\n";
+  out << "  vel: (" << velocities[0].x << ", " << velocities[0].y << ")\n";
+  out << "  f_ext: (" << forces[0].x << ", " << forces[0].y << ")\n";
+
+  if (bodies.size() > 1) {
+    out << "--- Sample Body 1 State ---\n";
+    out << "  pos: (" << bodies[1].x() << ", " << bodies[1].y() << ")\n";
+    out << "  vel: (" << velocities[1].x << ", " << velocities[1].y << ")\n";
+    out << "  f_ext: (" << forces[1].x << ", " << forces[1].y << ")\n";
+  }
+  out << "==================================================================="
+         "\n\n";
+}
+
 namespace fmm {
 
 namespace {
@@ -306,7 +417,8 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                    box->multipole_expansion[static_cast<std::size_t>(k)] *
                    inv_rel_pow;
         }
-        leaf->forces[i] = leaf->forces[i] + Vec2(-force.real(), force.imag());
+        leaf->forces[i] =
+            leaf->forces[i] + Vec2(-force.real(), force.imag()) * body.mass();
       }
     }
   }
@@ -368,7 +480,9 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                  leaf->local_expansion[static_cast<std::size_t>(l)] *
                  std::pow(z, l - 1);
       }
-      leaf->forces[i] = leaf->forces[i] + Vec2(-force.real(), force.imag());
+      leaf->forces[i] =
+          leaf->forces[i] + Vec2(-force.real(), force.imag()) * body.mass();
+      ;
     }
   }
 }
@@ -525,6 +639,28 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
 
       time_remaining -= dt_sub;
     }
+
+    // // TODO remove
+    // std::size_t alive_count = 0;
+    // for (Box *leaf : leaf_boxes) {
+    //   alive_count += leaf->bodies_in_box.size();
+    // }
+    // std::vector<Body> current_bodies;
+    // std::vector<Vec2> current_velocities;
+    // std::vector<Vec2> current_forces;
+    // current_bodies.reserve(alive_count);
+    // current_velocities.reserve(alive_count);
+    // current_forces.reserve(alive_count);
+    // for (Box *leaf : leaf_boxes) {
+    //   for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
+    //     const Body &body = leaf->bodies_in_box[i];
+    //     current_bodies.push_back(body);
+    //     current_velocities.push_back(velocities[body.id]);
+    //     current_forces.push_back(leaf->forces[i]);
+    //   }
+    // }
+    // log_step_diagnostics(step, step * dt, current_bodies, current_velocities,
+    //                      current_forces, SimConstants::kSofteningSquared);
 
     ++steps_since_live;
     if (live_writer != nullptr && steps_since_live >= live_view->frame_stride) {
