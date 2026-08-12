@@ -42,8 +42,8 @@ double binomial(int n, int k) {
 }
 
 // I saw a post saying this was sensible for more than one time step to reduce
-// things blowing up
-constexpr double kSofteningSquared = 1e-6;
+// things blowing up: FIX this might need tuning
+constexpr double kSofteningSquared = 1e-4;
 
 void accumulate_cross_pairwise_forces(const std::vector<Body> &left_bodies,
                                       std::vector<Vec2> &left_forces,
