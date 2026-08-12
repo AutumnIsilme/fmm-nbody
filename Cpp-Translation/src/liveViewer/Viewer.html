@@ -1,0 +1,48 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>FMM live view</title>
+<style>
+  html, body { margin: 0; height: 100%; background: #111318; overflow: hidden; }
+  .stage { position: relative; width: 100vw; height: 100vh; }
+  .stage img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: contain; opacity: 0; transition: opacity 150ms linear;
+  }
+  .stage img.visible { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="stage">
+  <img id="a" class="visible">
+  <img id="b">
+</div>
+<script>
+  // Path to the SVG run_fmm_simulation overwrites every step. Relative to
+  // this file's location 
+  const SRC = "../../live.svg";
+  const POLL_MS = 60; // ~16fps. Lower = smoother + more disk I/O.
+
+  const imgs = [document.getElementById("a"), document.getElementById("b")];
+  let visible = 0;
+
+  function loadNext() {
+    const next = imgs[1 - visible];
+    const probe = new Image();
+    probe.onload = () => {
+      next.src = probe.src;
+      imgs[visible].classList.remove("visible");
+      next.classList.add("visible");
+      visible = 1 - visible;
+    };
+    // File not written yet, or caught mid-rename: just try again next tick.
+    probe.onerror = () => {};
+    probe.src = SRC + "?t=" + Date.now();
+  }
+
+  imgs[0].src = SRC + "?t=" + Date.now();
+  setInterval(loadNext, POLL_MS);
+</script>
+</body>
+</html>
