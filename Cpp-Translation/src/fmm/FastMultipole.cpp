@@ -10,9 +10,9 @@
 #include <stdexcept>
 #include <string>
 
+#include "../../include/SimConstants.h"
 #include "../../include/cloud/Cloud.h"
 #include "../../include/live_view/LiveSettings.h"
-#include "../../include/quadtree/Colleagues.h"
 #include "../../include/quadtree/InteractionLists.h"
 #include "../../include/quadtree/QuadtreeBuilder.h"
 #include "../../include/quadtree/Strata.h"
@@ -21,6 +21,31 @@
 namespace fmm {
 
 namespace {
+
+std::vector<std::size_t> remove_escaped_bodies(std::vector<Box *> &leaf_boxes,
+                                               const Vec2 &domain_centre,
+                                               double escape_radius_sq) {
+  std::vector<std::size_t> removed_ids;
+  for (Box *leaf : leaf_boxes) {
+    std::vector<Body> kept;
+    kept.reserve(leaf->bodies_in_box.size());
+    for (const Body &body : leaf->bodies_in_box) {
+      double dx = body.x() - domain_centre.x;
+      double dy = body.y() - domain_centre.y;
+      bool finite = std::isfinite(body.x()) && std::isfinite(body.y());
+      bool escaped = finite && (dx * dx + dy * dy > escape_radius_sq);
+      if (!finite || escaped) {
+        removed_ids.push_back(body.id);
+      } else {
+        kept.push_back(body);
+      }
+    }
+    if (kept.size() != leaf->bodies_in_box.size()) {
+      leaf->bodies_in_box = std::move(kept);
+    }
+  }
+  return removed_ids;
+}
 
 using Clock = std::chrono::steady_clock;
 
@@ -40,10 +65,6 @@ double binomial(int n, int k) {
   }
   return result;
 }
-
-// I saw a post saying this was sensible for more than one time step to reduce
-// things blowing up: FIX this might need tuning
-constexpr double kSofteningSquared = 1e-4;
 
 void accumulate_cross_pairwise_forces(const std::vector<Body> &left_bodies,
                                       std::vector<Vec2> &left_forces,
@@ -126,7 +147,7 @@ bodies_from_rows(const std::vector<std::vector<double>> &rows) {
 Vec2 pairwise_force(const Body &left, const Body &right) {
   double dx = right.x() - left.x();
   double dy = right.y() - left.y();
-  double norm_sq = dx * dx + dy * dy + kSofteningSquared;
+  double norm_sq = dx * dx + dy * dy + SimConstants::kSofteningSquared;
   double denom = norm_sq * std::sqrt(norm_sq); // (r^2 + eps^2)^{3/2}
   double mass_product = left.mass() * right.mass();
   double scale_factor = mass_product / denom;
@@ -448,18 +469,59 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
   int steps_since_live = 0;
 
   for (int step = 0; step < num_steps; ++step) {
-    solve_fmm_forces(strata, leaf_boxes, epsilon);
+    double time_remaining = dt;
+    int substeps_taken = 0;
 
-    for (Box *leaf : leaf_boxes) {
-      for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
-        Body &body = leaf->bodies_in_box[i];
-        std::size_t id = body.id;
+    while (time_remaining > 0.0) {
+      solve_fmm_forces(strata, leaf_boxes, epsilon);
 
-        Vec2 accel = leaf->forces[i] * (1.0 / masses[id]);
-        velocities[id] = velocities[id] + (accel * dt); // kick
-        Vec2 displacement = velocities[id] * dt;        // drift
-        body.set_position(body.x() + displacement.x, body.y() + displacement.y);
+      double max_accel_sq = 0.0;
+      for (Box *leaf : leaf_boxes) {
+        for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
+          const Body &body = leaf->bodies_in_box[i];
+          Vec2 accel = leaf->forces[i] * (1.0 / masses[body.id]);
+          double accel_sq = accel.x * accel.x + accel.y * accel.y;
+          if (std::isfinite(accel_sq)) { // skip anything already blown up
+            max_accel_sq = std::max(max_accel_sq, accel_sq);
+          }
+        }
       }
+
+      double dt_sub = time_remaining;
+      ++substeps_taken;
+      if (max_accel_sq > 0.0 &&
+          substeps_taken < SimConstants::kMaxSubstepsPerFrame) {
+        double max_accel = std::sqrt(max_accel_sq);
+        double softening_length = std::sqrt(SimConstants::kSofteningSquared);
+        double dt_stable = SimConstants::kTimestepSafetyFactor *
+                           std::sqrt(softening_length / max_accel);
+        dt_sub = std::min(dt_sub, dt_stable);
+      }
+
+      for (Box *leaf : leaf_boxes) {
+        for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
+          Body &body = leaf->bodies_in_box[i];
+          std::size_t id = body.id;
+          Vec2 accel = leaf->forces[i] * (1.0 / masses[id]);
+          velocities[id] = velocities[id] + (accel * dt_sub);
+          Vec2 displacement = velocities[id] * dt_sub;
+          body.set_position(body.x() + displacement.x,
+                            body.y() + displacement.y);
+        }
+      }
+
+      Vec2 domain_centre = bodies_tree->root +
+                           Vec2(bodies_tree->extent, bodies_tree->extent) / 2.0;
+      double escape_radius =
+          SimConstants::kEscapeRadiusMultiplier * bodies_tree->extent;
+      auto removed = remove_escaped_bodies(leaf_boxes, domain_centre,
+                                           escape_radius * escape_radius);
+      for (std::size_t id : removed) {
+        std::cerr << "body id=" << id << " escaped the domain at step " << step
+                  << " - removing it from the simulation\n";
+      }
+
+      time_remaining -= dt_sub;
     }
 
     ++steps_since_live;
@@ -470,7 +532,8 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
 
     ++steps_since_rebuild;
     if (steps_since_rebuild >= rebuild_every) {
-      rebuild_tree();
+      rebuild_tree(); // no longer expected to throw -- bad bodies are gone
+                      // before this runs
       steps_since_rebuild = 0;
     }
   }
