@@ -1,5 +1,75 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="-1.05 -1.05 2.1 2.1">
 <g transform="scale(1,-1)">
-  <rect x="-1" y="-1" width="2" height="2" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <rect x="-1" y="-1" width="0.5" height="0.5" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="-0.5" y="-1" width="0.5" height="0.5" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="-0.5" y="-0.5" width="0.25" height="0.25" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="-0.5" y="-0.25" width="0.25" height="0.25" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="-0.25" y="-0.5" width="0.25" height="0.25" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="-0.25" y="-0.25" width="0.25" height="0.25" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="-1" y="0" width="0.25" height="0.25" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="-1" y="0.25" width="0.25" height="0.25" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="-0.75" y="0" width="0.25" height="0.25" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="-0.75" y="0.25" width="0.25" height="0.25" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="-1" y="0.5" width="0.5" height="0.5" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="-0.5" y="0" width="0.5" height="0.5" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="-0.5" y="0.5" width="0.5" height="0.5" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="0" y="-1" width="1" height="1" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="0" y="0" width="0.25" height="0.25" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="0" y="0.25" width="0.25" height="0.25" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="0.25" y="0" width="0.25" height="0.25" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="0.25" y="0.25" width="0.25" height="0.25" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="0" y="0.5" width="0.5" height="0.5" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="0.5" y="0" width="0.5" height="0.5" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <rect x="0.5" y="0.5" width="0.5" height="0.5" fill="none" stroke="#333333" stroke-width="0.0015" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
+  <circle cx="nan" cy="nan" r="0.003" fill="#e63946" />
 </g>
 </svg>
