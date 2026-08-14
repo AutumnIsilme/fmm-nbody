@@ -124,13 +124,53 @@ void split(Box &box, const std::vector<Body> &bodies,
             : nullptr;
   }
 }
+
 std::unique_ptr<Box> create_quadtree(const std::vector<Body> &bodies,
                                      std::size_t bodies_per_box) {
-  const Vec2 box_0_root(-1.0, -1.0);
-  const double box_0_extent = 2.0;
+  if (bodies.empty()) {
+    const Vec2 box_0_root(-1.0, -1.0);
+    const double box_0_extent = 2.0;
+    return std::unique_ptr<Box>(
+        new Box(box_0_root, box_0_extent, std::vector<Box *>{},
+                box_0_root + Vec2(box_0_extent, box_0_extent) / 2.0));
+  }
+
+  // 1. Compute dynamic bounding box enclosing all active bodies
+  double min_x = bodies[0].x();
+  double max_x = bodies[0].x();
+  double min_y = bodies[0].y();
+  double max_y = bodies[0].y();
+
+  for (const auto &body : bodies) {
+    if (std::isfinite(body.x()) && std::isfinite(body.y())) {
+      min_x = std::min(min_x, body.x());
+      max_x = std::max(max_x, body.x());
+      min_y = std::min(min_y, body.y());
+      max_y = std::max(max_y, body.y());
+    }
+  }
+
+  double width = max_x - min_x;
+  double height = max_y - min_y;
+  double extent = std::max(width, height);
+
+  // 2. Add 10% padding so no particle lies directly on the outer box boundary
+  if (extent < 1e-6) {
+    extent = 2.0; // Default size if bodies are at a single point
+  } else {
+    extent *= 1.10;
+  }
+
+  double center_x = 0.5 * (min_x + max_x);
+  double center_y = 0.5 * (min_y + max_y);
+
+  Vec2 box_0_root(center_x - 0.5 * extent, center_y - 0.5 * extent);
+  double box_0_extent = extent;
+
   auto box_0 = std::unique_ptr<Box>(
       new Box(box_0_root, box_0_extent, std::vector<Box *>{},
               box_0_root + Vec2(box_0_extent, box_0_extent) / 2.0));
+
   if (bodies.size() <= bodies_per_box) {
     box_0->bodies_in_box = bodies;
   } else {
@@ -139,4 +179,5 @@ std::unique_ptr<Box> create_quadtree(const std::vector<Body> &bodies,
   }
   return box_0;
 }
+
 } // namespace fmm
