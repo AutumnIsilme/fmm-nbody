@@ -16,15 +16,11 @@ Body::Body(std::vector<double> data_) : data(std::move(data_)) {
 
 Body::Body(double x, double y) : data{x, y} {}
 
-Body::Body(double x, double y, double charge) : data{x, y, charge} {}
-
 double Body::x() const { return data[0]; }
 
 double Body::y() const { return data[1]; }
 
 double Body::mass() const { return data.size() > 2 ? data.back() : 0.0; }
-
-double Body::charge() const { return mass(); }
 
 std::array<double, 2> Body::position() const { return {data[0], data[1]}; }
 

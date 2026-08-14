@@ -162,7 +162,6 @@ bodies_from_rows(const std::vector<std::vector<double>> &rows) {
   return result;
 }
 
-// I added a softening factor in here
 Vec2 pairwise_force(const Body &left, const Body &right) {
   std::complex<double> dz(right.x() - left.x(), right.y() - left.y());
 
@@ -172,31 +171,6 @@ Vec2 pairwise_force(const Body &left, const Body &right) {
   double mass_product = left.mass() * right.mass();
 
   return Vec2(dz.real() * k * mass_product, dz.imag() * k * mass_product);
-}
-
-void basic(int N) {
-  auto start = Clock::now();
-
-  std::vector<Body> bodies =
-      bodies_from_rows(fmm::generate_2d_bodies_uniform_random(N, 10.0));
-
-  Box box(Vec2(-1.0, -1.0), 2.0);
-  box.bodies_in_box = bodies;
-  box.forces.assign(box.bodies_in_box.size(), Vec2(0.0, 0.0));
-
-  auto constructed = Clock::now();
-
-  accumulate_self_pairwise_forces(box.bodies_in_box, box.forces);
-
-  auto done = Clock::now();
-
-  std::cout << "Total time: " << seconds_since(start) << "\n";
-  std::cout << "Construction time: "
-            << std::chrono::duration<double>(constructed - start).count()
-            << "\n";
-  std::cout << "Processing time: "
-            << std::chrono::duration<double>(done - constructed).count()
-            << "\n";
 }
 
 void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
@@ -412,7 +386,6 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
       }
       leaf->forces[i] =
           leaf->forces[i] + Vec2(-force.real(), force.imag()) * body.mass();
-      ;
     }
   }
 }

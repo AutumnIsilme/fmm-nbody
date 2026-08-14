@@ -10,6 +10,5 @@ constexpr double kEscapeRadiusMultiplier =
          // not coming back
 constexpr double kSofteningSquared = 0.000225; // 0.015^2
 constexpr double kMinSubstepDt = 1e-7;
-constexpr double kMaxAccelSquared = 1e12;
 
 } // namespace SimConstants

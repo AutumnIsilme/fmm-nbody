@@ -23,9 +23,24 @@ xdg-open Viewer.html
 ```
 
 ### 3. Run the Simulation
-Execute `./fmm-run` with any custom flags you want to pass:
+Execute `./fmm-run` with any custom flags you want to pass. Ensure to run it from the same directory as `Viewer.html`
 
 The simulation will now be running in your browser
+
+## Command-Line Interface
+The CLI supports both long and short flags to customize simulation runs on the fly:
+
+| Flag | Short | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--bodies <int>` | `-n` | `500` | Total number of particles ($N$) |
+| `--bodies-per-box <int>` | `-b` | `25` | Maximum particles in a leaf box before splitting |
+| `--epsilon <double>` | `-e` | `1e-7` | Multipole precision tolerance |
+| `--steps <int>` | `-s` | `5000` | Total number of integration sub-steps |
+| `--dt <double>` | — | `1e-3` | Time step delta ($dt$) |
+| `--rebuild-every <int>` | `-r` | `1` | Frequency (in steps) to rebuild the Quadtree |
+| `--no-boxes` | — | — | Disable background quadtree box rendering |
+| `--show-boxes` | — | `enabled` | Enable background quadtree box rendering |
+| `--help` | `-h` | — | Display help menu and exit |
 
 ---
 
@@ -38,4 +53,3 @@ Core physical constants and numerical parameters are defined in **`include/SimCo
 * **`kMaxSubstepsPerFrame` (`1000`):** Safety ceiling on adaptive sub-steps per frame to prevent execution hangs during tight orbital passes.
 * **`kMinSubstepDt` (`1e-7`):** The absolute floor for time-step resolution ($dt$) during sub-stepping iterations.
 * **`kEscapeRadiusMultiplier` (`1.5`):** Domain boundary threshold factor. Particles moving beyond this multiple of domain widths are marked as un-bound/escaped.
-* **`kMaxAccelSquared` (`1e12`):** Upper limit on squared acceleration magnitude ($a_{\text{max}}^2$) serving as a guardrail against numerical divergence.
