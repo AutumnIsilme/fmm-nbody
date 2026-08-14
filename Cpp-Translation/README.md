@@ -25,9 +25,7 @@ xdg-open Viewer.html
 ### 3. Run the Simulation
 Execute `./fmm-run` with any custom flags you want to pass:
 
-```bash
-./fmm-run --bodies 250 --dt 1e-4
-```
+The simulation will now be running in your browser
 
 ---
 
