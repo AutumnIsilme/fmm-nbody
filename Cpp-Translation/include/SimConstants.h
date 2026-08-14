@@ -11,5 +11,7 @@ constexpr double kEscapeRadiusMultiplier =
 // I saw a post saying this was sensible for more than one time step to reduce
 // things blowing up
 constexpr double kSofteningSquared = 1e-4;
+constexpr double kMinSubstepDt = 1e-6;
+constexpr double kMaxAccelSquared = 1e12;
 
 } // namespace SimConstants

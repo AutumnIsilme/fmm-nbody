@@ -6,6 +6,7 @@
 #include <complex>
 #include <filesystem>
 #include <iostream>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -30,8 +31,15 @@ void log_step_diagnostics(int step, double current_time,
                           const std::vector<fmm::Vec2> &velocities,
                           const std::vector<fmm::Vec2> &forces, double eps_sq,
                           std::ostream &out = std::cout) {
-  if (bodies.empty())
+  const std::size_t num_bodies = bodies.size();
+  if (num_bodies == 0) {
+    out << "==================== STEP " << step << " (t = " << std::fixed
+        << std::setprecision(4) << current_time << ") ====================\n";
+    out << "No active bodies remaining.\n";
+    out << "==================================================================="
+           "\n\n";
     return;
+  }
 
   const double G = 1.0;
 
@@ -46,18 +54,17 @@ void log_step_diagnostics(int step, double current_time,
   double max_speed = 0.0;
 
   // --- 1. Single-Body Accumulations ---
-  for (size_t i = 0; i < bodies.size(); ++i) {
+  for (std::size_t i = 0; i < num_bodies; ++i) {
     const auto &b = bodies[i];
     double m = b.mass();
     double x = b.x();
     double y = b.y();
 
-    // Access velocity and force from their respective vectors
-    // Adjust .x() vs .x if your Vec2 uses functions instead of public members
-    double vx = velocities[i].x;
-    double vy = velocities[i].y;
-    double fx = forces[i].x;
-    double fy = forces[i].y;
+    // Safely pull velocity and force with fallback if vectors are mismatched
+    double vx = (i < velocities.size()) ? velocities[i].x : 0.0;
+    double vy = (i < velocities.size()) ? velocities[i].y : 0.0;
+    double fx = (i < forces.size()) ? forces[i].x : 0.0;
+    double fy = (i < forces.size()) ? forces[i].y : 0.0;
 
     total_mass += m;
     cm_x += m * x;
@@ -66,10 +73,8 @@ void log_step_diagnostics(int step, double current_time,
     px += m * vx;
     py += m * vy;
 
-    // Angular momentum in 2D: L_z = m * (x * v_y - y * v_x)
     angular_momentum_z += m * (x * vy - y * vx);
 
-    // Kinetic Energy: 0.5 * m * v^2
     double speed_sq = vx * vx + vy * vy;
     kinetic_energy += 0.5 * m * speed_sq;
 
@@ -83,10 +88,9 @@ void log_step_diagnostics(int step, double current_time,
     cm_y /= total_mass;
   }
 
-  // --- 2. Pairwise Potential Energy (Exact 2D Log-Kernel) ---
-  // PE_ij = 0.5 * G * m_i * m_j * ln(r^2 + eps^2)
-  for (size_t i = 0; i + 1 < bodies.size(); ++i) {
-    for (size_t j = i + 1; j < bodies.size(); ++j) {
+  // --- 2. Pairwise Potential Energy ---
+  for (std::size_t i = 0; i < num_bodies; ++i) {
+    for (std::size_t j = i + 1; j < num_bodies; ++j) {
       double dx = bodies[j].x() - bodies[i].x();
       double dy = bodies[j].y() - bodies[i].y();
       double r2_soft = dx * dx + dy * dy + eps_sq;
@@ -102,28 +106,40 @@ void log_step_diagnostics(int step, double current_time,
   out << "==================== STEP " << step << " (t = " << std::fixed
       << std::setprecision(4) << current_time << ") ====================\n";
   out << std::scientific << std::setprecision(6);
-  out << "Total Mass      : " << total_mass << "\n";
-  out << "Center of Mass  : (" << cm_x << ", " << cm_y << ")\n";
-  out << "Linear Momentum : (" << px << ", " << py
+  out << "Total Mass       : " << total_mass << "\n";
+  out << "Center of Mass   : (" << cm_x << ", " << cm_y << ")\n";
+  out << "Linear Momentum  : (" << px << ", " << py
       << ")  [|P| = " << std::sqrt(px * px + py * py) << "]\n";
-  out << "Angular Mom (L) : " << angular_momentum_z << "\n";
-  out << "Kinetic Energy  : " << kinetic_energy << "\n";
-  out << "Potential Energy: " << potential_energy << "\n";
-  out << "Total Energy    : " << total_energy << "\n";
-  out << "Max Speed       : " << max_speed << "\n";
-  out << "Max Force Mag   : " << max_force_mag << "\n";
+  out << "Angular Mom (L)  : " << angular_momentum_z << "\n";
+  out << "Kinetic Energy   : " << kinetic_energy << "\n";
+  out << "Potential Energy : " << potential_energy << "\n";
+  out << "Total Energy     : " << total_energy << "\n";
+  out << "Max Speed        : " << max_speed << "\n";
+  out << "Max Force Mag    : " << max_force_mag << "\n";
 
-  // Sample Tracking for inspection
-  out << "--- Sample Body 0 State ---\n";
-  out << "  pos: (" << bodies[0].x() << ", " << bodies[0].y() << ")\n";
-  out << "  vel: (" << velocities[0].x << ", " << velocities[0].y << ")\n";
-  out << "  f_ext: (" << forces[0].x << ", " << forces[0].y << ")\n";
+  // --- 4. Sample Tracking (Safely bounded) ---
+  if (num_bodies > 0) {
+    double v0_x = (!velocities.empty()) ? velocities[0].x : 0.0;
+    double v0_y = (!velocities.empty()) ? velocities[0].y : 0.0;
+    double f0_x = (!forces.empty()) ? forces[0].x : 0.0;
+    double f0_y = (!forces.empty()) ? forces[0].y : 0.0;
 
-  if (bodies.size() > 1) {
+    out << "--- Sample Body 0 State ---\n";
+    out << "  pos: (" << bodies[0].x() << ", " << bodies[0].y() << ")\n";
+    out << "  vel: (" << v0_x << ", " << v0_y << ")\n";
+    out << "  f_ext: (" << f0_x << ", " << f0_y << ")\n";
+  }
+
+  if (num_bodies > 1) {
+    double v1_x = (velocities.size() > 1) ? velocities[1].x : 0.0;
+    double v1_y = (velocities.size() > 1) ? velocities[1].y : 0.0;
+    double f1_x = (forces.size() > 1) ? forces[1].x : 0.0;
+    double f1_y = (forces.size() > 1) ? forces[1].y : 0.0;
+
     out << "--- Sample Body 1 State ---\n";
     out << "  pos: (" << bodies[1].x() << ", " << bodies[1].y() << ")\n";
-    out << "  vel: (" << velocities[1].x << ", " << velocities[1].y << ")\n";
-    out << "  f_ext: (" << forces[1].x << ", " << forces[1].y << ")\n";
+    out << "  vel: (" << v1_x << ", " << v1_y << ")\n";
+    out << "  f_ext: (" << f1_x << ", " << f1_y << ")\n";
   }
   out << "==================================================================="
          "\n\n";
@@ -175,6 +191,19 @@ double binomial(int n, int k) {
     result /= static_cast<double>(i + 1);
   }
   return result;
+}
+
+std::complex<double> soften_separation(std::complex<double> z,
+                                       double min_norm) {
+  double norm = std::abs(z);
+  if (norm >= min_norm) {
+    return z;
+  }
+  if (norm == 0.0) {
+    constexpr double kZeroSeparationFallbackAngle = 0.7853981633974483; // pi/4
+    return std::polar(min_norm, kZeroSeparationFallbackAngle);
+  }
+  return z * (min_norm / norm);
 }
 
 void accumulate_cross_pairwise_forces(const std::vector<Body> &left_bodies,
@@ -260,9 +289,8 @@ Vec2 pairwise_force(const Body &left, const Body &right) {
   double dy = right.y() - left.y();
   double norm_sq = dx * dx + dy * dy + SimConstants::kSofteningSquared;
 
-  // 2D gravity denominator: norm_sq is (r^2 + eps^2)
   double mass_product = left.mass() * right.mass();
-  double scale_factor = mass_product / norm_sq; // Removed std::sqrt!
+  double scale_factor = mass_product / norm_sq;
 
   return Vec2(dx * scale_factor, dy * scale_factor);
 }
@@ -303,6 +331,26 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
         std::to_string(kExpansionTerms) + ").");
   }
 
+  for (Box *leaf : leaf_boxes) {
+    std::vector<Body> finite_only;
+    finite_only.reserve(leaf->bodies_in_box.size());
+    for (const Body &body : leaf->bodies_in_box) {
+      if (std::isfinite(body.x()) && std::isfinite(body.y())) {
+        finite_only.push_back(body);
+      } else {
+        std::cerr << "solve_fmm_forces: body id=" << body.id
+                  << " has a non-finite position and was excluded from "
+                     "this solve (it should already have been removed by "
+                     "remove_escaped_bodies)\n";
+      }
+    }
+    if (finite_only.size() != leaf->bodies_in_box.size()) {
+      leaf->bodies_in_box = std::move(finite_only);
+    }
+  }
+
+  const double softening_length = std::sqrt(SimConstants::kSofteningSquared);
+
   reset_expansions(strata);
 
   // --- Step 2.1 ---
@@ -339,8 +387,9 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                 child->multipole_expansion[static_cast<std::size_t>(k)] *
                 std::pow(z_0, l - k) * binomial(l - 1, k - 1);
           }
-          box->multipole_expansion[static_cast<std::size_t>(l)] -=
-              (child->multipole_expansion[0] / static_cast<double>(l)) *
+          double sign = (l % 2 == 0) ? 1.0 : -1.0;
+          box->multipole_expansion[static_cast<std::size_t>(l)] +=
+              sign * (child->multipole_expansion[0] / static_cast<double>(l)) *
               std::pow(z_0, l);
         }
       }
@@ -409,6 +458,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
       for (Box *box : leaf->W) {
         std::complex<double> relative =
             z - std::complex<double>(box->centre.x, box->centre.y);
+        relative = soften_separation(relative, softening_length);
         std::complex<double> force = box->multipole_expansion[0] / relative;
         std::complex<double> inv_rel_pow = 1.0 / relative;
         for (int k = 1; k <= p; ++k) {
@@ -433,6 +483,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
         for (const Body &body : big_leaf->bodies_in_box) {
           std::complex<double> z =
               std::complex<double>(body.x(), body.y()) - centre;
+          z = soften_separation(z, softening_length);
           double mass = body.mass();
           box->local_expansion[0] += mass * std::log(-z);
           for (int l = 1; l <= p; ++l) {
@@ -474,8 +525,9 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
       const Body &body = leaf->bodies_in_box[i];
       std::complex<double> z =
           std::complex<double>(body.x(), body.y()) - centre;
+      z = soften_separation(z, softening_length);
       std::complex<double> force(0.0, 0.0);
-      for (int l = 0; l <= p; ++l) {
+      for (int l = 1; l <= p; ++l) {
         force += static_cast<double>(l) *
                  leaf->local_expansion[static_cast<std::size_t>(l)] *
                  std::pow(z, l - 1);
@@ -498,6 +550,7 @@ void run_fmm(int N, int bodies_per_box, double epsilon) {
   std::vector<Box *> leaf_boxes = leaves(strata);
   populate_list_1(leaf_boxes);
   populate_list_2(strata);
+  symmetrize_v_list(strata);
   populate_list_3_and_4(leaf_boxes);
 
   auto populated = Clock::now();
@@ -518,8 +571,8 @@ void run_fmm(int N, int bodies_per_box, double epsilon) {
 //   1. solve_fmm_forces on the current tree
 //   2. kick-drift: v += (F/m)*dt, then x += v*dt
 //   3. draw a frame
-//   4. rebuild the tree once `rebuild_every` steps have passed since the
-//      last rebuild
+//   4. rebuild the tree once `rebuild_every` substeps have passed since
+//      the last rebuild
 void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
                         int num_steps, double dt, int rebuild_every,
                         const LiveViewSettings *live_view) {
@@ -543,6 +596,7 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
   std::vector<Box *> leaf_boxes = leaves(strata);
   populate_list_1(leaf_boxes);
   populate_list_2(strata);
+  symmetrize_v_list(strata);
   populate_list_3_and_4(leaf_boxes);
 
   std::vector<Vec2> velocities(static_cast<std::size_t>(N), Vec2(0.0, 0.0));
@@ -569,6 +623,7 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
     leaf_boxes = leaves(strata);
     populate_list_1(leaf_boxes);
     populate_list_2(strata);
+    symmetrize_v_list(strata);
     populate_list_3_and_4(leaf_boxes);
   };
 
@@ -592,26 +647,42 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
       solve_fmm_forces(strata, leaf_boxes, epsilon);
 
       double max_accel_sq = 0.0;
+      bool saw_nonfinite_accel = false;
       for (Box *leaf : leaf_boxes) {
         for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
           const Body &body = leaf->bodies_in_box[i];
           Vec2 accel = leaf->forces[i] * (1.0 / masses[body.id]);
           double accel_sq = accel.x * accel.x + accel.y * accel.y;
-          if (std::isfinite(accel_sq)) { // skip anything already blown up
+          if (std::isfinite(accel_sq)) {
             max_accel_sq = std::max(max_accel_sq, accel_sq);
+          } else {
+            std::cerr << "step " << step << ": body id=" << body.id
+                      << " has a non-finite acceleration this substep; "
+                         "forcing the minimum substep\n";
+            saw_nonfinite_accel = true;
           }
         }
       }
+      if (saw_nonfinite_accel) {
+        max_accel_sq = std::numeric_limits<double>::max();
+      }
+
+      ++substeps_taken;
 
       double dt_sub = time_remaining;
-      ++substeps_taken;
-      if (max_accel_sq > 0.0 &&
-          substeps_taken < SimConstants::kMaxSubstepsPerFrame) {
+      if (max_accel_sq > 0.0) {
         double max_accel = std::sqrt(max_accel_sq);
         double softening_length = std::sqrt(SimConstants::kSofteningSquared);
         double dt_stable = SimConstants::kTimestepSafetyFactor *
                            std::sqrt(softening_length / max_accel);
+        dt_stable = std::max(dt_stable, SimConstants::kMinSubstepDt);
         dt_sub = std::min(dt_sub, dt_stable);
+      }
+
+      if (substeps_taken == SimConstants::kMaxSubstepsPerFrame) {
+        std::cerr << "step " << step << ": exceeded " << substeps_taken
+                  << " substeps (max_accel_sq=" << max_accel_sq
+                  << ") -- continuing with the floored step size\n";
       }
 
       for (Box *leaf : leaf_boxes) {
@@ -619,6 +690,19 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
           Body &body = leaf->bodies_in_box[i];
           std::size_t id = body.id;
           Vec2 accel = leaf->forces[i] * (1.0 / masses[id]);
+          double accel_sq = accel.x * accel.x + accel.y * accel.y;
+
+          if (!std::isfinite(accel_sq)) {
+            body.set_position(std::numeric_limits<double>::quiet_NaN(),
+                              std::numeric_limits<double>::quiet_NaN());
+            continue;
+          }
+
+          if (accel_sq > SimConstants::kMaxAccelSquared) {
+            double scale = std::sqrt(SimConstants::kMaxAccelSquared / accel_sq);
+            accel = accel * scale;
+          }
+
           velocities[id] = velocities[id] + (accel * dt_sub);
           Vec2 displacement = velocities[id] * dt_sub;
           body.set_position(body.x() + displacement.x,
@@ -638,41 +722,55 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
       }
 
       time_remaining -= dt_sub;
+
+      ++steps_since_rebuild;
+      if (steps_since_rebuild >= rebuild_every) {
+        rebuild_tree();
+        steps_since_rebuild = 0;
+      }
     }
 
-    // // TODO remove
-    // std::size_t alive_count = 0;
-    // for (Box *leaf : leaf_boxes) {
-    //   alive_count += leaf->bodies_in_box.size();
-    // }
-    // std::vector<Body> current_bodies;
-    // std::vector<Vec2> current_velocities;
-    // std::vector<Vec2> current_forces;
-    // current_bodies.reserve(alive_count);
-    // current_velocities.reserve(alive_count);
-    // current_forces.reserve(alive_count);
-    // for (Box *leaf : leaf_boxes) {
-    //   for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
-    //     const Body &body = leaf->bodies_in_box[i];
-    //     current_bodies.push_back(body);
-    //     current_velocities.push_back(velocities[body.id]);
-    //     current_forces.push_back(leaf->forces[i]);
-    //   }
-    // }
-    // log_step_diagnostics(step, step * dt, current_bodies, current_velocities,
-    //                      current_forces, SimConstants::kSofteningSquared);
+    // TODO remove
+    std::size_t alive_count = 0;
+    for (Box *leaf : leaf_boxes) {
+      alive_count += leaf->bodies_in_box.size();
+    }
+
+    std::vector<Body> current_bodies;
+    std::vector<Vec2> current_velocities;
+    std::vector<Vec2> current_forces;
+    current_bodies.reserve(alive_count);
+    current_velocities.reserve(alive_count);
+    current_forces.reserve(alive_count);
+
+    for (Box *leaf : leaf_boxes) {
+      for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
+        const Body &body = leaf->bodies_in_box[i];
+        current_bodies.push_back(body);
+
+        // Guard global velocity vector lookup by ID
+        if (body.id < velocities.size()) {
+          current_velocities.push_back(velocities[body.id]);
+        } else {
+          current_velocities.push_back(Vec2(0.0, 0.0));
+        }
+
+        // Guard leaf force vector indexing
+        if (i < leaf->forces.size()) {
+          current_forces.push_back(leaf->forces[i]);
+        } else {
+          current_forces.push_back(Vec2(0.0, 0.0));
+        }
+      }
+    }
+
+    log_step_diagnostics(step, step * dt, current_bodies, current_velocities,
+                         current_forces, SimConstants::kSofteningSquared);
 
     ++steps_since_live;
     if (live_writer != nullptr && steps_since_live >= live_view->frame_stride) {
       live_writer->write(*bodies_tree);
       steps_since_live = 0;
-    }
-
-    ++steps_since_rebuild;
-    if (steps_since_rebuild >= rebuild_every) {
-      rebuild_tree(); // no longer expected to throw -- bad bodies are gone
-                      // before this runs
-      steps_since_rebuild = 0;
     }
   }
 

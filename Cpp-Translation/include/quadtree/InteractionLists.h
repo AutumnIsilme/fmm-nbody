@@ -18,6 +18,8 @@
 
 namespace fmm {
 
+void symmetrize_v_list(const Strata &strata);
+
 void populate_list_1(const std::vector<Box *> &leaf_boxes);
 
 void populate_list_2(const Strata &strata);
