@@ -194,17 +194,22 @@ double binomial(int n, int k) {
   return result;
 }
 
-std::complex<double> soften_separation(std::complex<double> z,
-                                       double min_norm) {
-  double norm = std::abs(z);
-  if (norm >= min_norm) {
-    return z;
+double get_cubic_spline_force_factor(std::complex<double> dz, double h) {
+  double r_sq = std::norm(dz); // |dz|^2
+  double h_sq = h * h;
+
+  // 1. Outside softening radius: Exact 2D Newtonian Gravity
+  if (r_sq >= h_sq) {
+    return 1.0 / r_sq;
   }
-  if (norm == 0.0) {
-    constexpr double kZeroSeparationFallbackAngle = 0.7853981633974483; // pi/4
-    return std::polar(min_norm, kZeroSeparationFallbackAngle);
+
+  // 2. Inside softening radius: Smooth C^1 Cubic Spline
+  double r = std::sqrt(r_sq);
+  if (r < 1e-12) {
+    return 0.0; // Force vanishes at r = 0
   }
-  return z * (min_norm / norm);
+
+  return (3.0 / h_sq) - (2.0 * r / (h_sq * h));
 }
 
 void accumulate_cross_pairwise_forces(const std::vector<Body> &left_bodies,
@@ -286,14 +291,15 @@ bodies_from_rows(const std::vector<std::vector<double>> &rows) {
 
 // I added a softening factor in here
 Vec2 pairwise_force(const Body &left, const Body &right) {
-  double dx = right.x() - left.x();
-  double dy = right.y() - left.y();
-  double norm_sq = dx * dx + dy * dy + SimConstants::kSofteningSquared;
+  std::complex<double> dz(right.x() - left.x(), right.y() - left.y());
+
+  // Derive the softening radius 'h' from your existing squared constant
+  double h = std::sqrt(SimConstants::kSofteningSquared);
+  double k = get_cubic_spline_force_factor(dz, h);
 
   double mass_product = left.mass() * right.mass();
-  double scale_factor = mass_product / norm_sq;
 
-  return Vec2(dx * scale_factor, dy * scale_factor);
+  return Vec2(dz.real() * k * mass_product, dz.imag() * k * mass_product);
 }
 
 void basic(int N) {
@@ -462,9 +468,6 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
         std::complex<double> relative =
             z - std::complex<double>(box->centre.x, box->centre.y);
 
-        // --- FIX 2C: Soften List 3 separation ---
-        relative = soften_separation(relative, softening_length);
-
         std::complex<double> force = box->multipole_expansion[0] / relative;
         std::complex<double> inv_rel_pow = 1.0 / relative;
         for (int k = 1; k <= p; ++k) {
@@ -474,7 +477,6 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                    inv_rel_pow;
         }
 
-        // --- FIX: Gradient sign correction (-force.real(), force.imag()) ---
         leaf->forces[i] =
             leaf->forces[i] + Vec2(-force.real(), force.imag()) * body.mass();
       }
@@ -491,7 +493,6 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
         for (const Body &body : big_leaf->bodies_in_box) {
           std::complex<double> z =
               std::complex<double>(body.x(), body.y()) - centre;
-          z = soften_separation(z, softening_length);
           double mass = body.mass();
           box->local_expansion[0] += mass * std::log(-z);
           for (int l = 1; l <= p; ++l) {
@@ -533,7 +534,6 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
       const Body &body = leaf->bodies_in_box[i];
       std::complex<double> z =
           std::complex<double>(body.x(), body.y()) - centre;
-      z = soften_separation(z, softening_length);
       std::complex<double> force(0.0, 0.0);
       for (int l = 1; l <= p; ++l) {
         force += static_cast<double>(l) *

@@ -8,7 +8,7 @@ constexpr int kMaxSubstepsPerFrame =
 constexpr double kEscapeRadiusMultiplier =
     1.5; // after a body has moved this many domains-widths away, treat it as
          // not coming back
-constexpr double kSofteningSquared = 1e-4;
+constexpr double kSofteningSquared = 0.000225; // 0.015^2
 constexpr double kMinSubstepDt = 1e-7;
 constexpr double kMaxAccelSquared = 1e12;
 
