@@ -266,8 +266,8 @@ public:
     }
   }
 
-  void write(const Box &root) {
-    graph_quadtree(root, tmp_path_, box_colour_, particle_colour_);
+  void write(const Box &root, bool show_boxes) {
+    graph_quadtree(root, tmp_path_, box_colour_, particle_colour_, show_boxes);
     std::filesystem::rename(tmp_path_, path_);
   }
 
@@ -553,7 +553,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
 //      the last rebuild
 void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
                         int num_steps, double dt, int rebuild_every,
-                        const LiveViewSettings *live_view) {
+                        bool show_boxes, const LiveViewSettings *live_view) {
   if (rebuild_every <= 0) {
     throw std::invalid_argument(
         "run_fmm_simulation: rebuild_every must be positive");
@@ -611,7 +611,8 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
     live_writer = std::make_unique<LiveWriter>(live_view->output_path,
                                                live_view->box_colour,
                                                live_view->particle_colour);
-    live_writer->write(*bodies_tree); // initial configuration, t = 0
+    live_writer->write(*bodies_tree,
+                       show_boxes); // initial configuration, t = 0
   }
 
   int steps_since_rebuild = 0;
@@ -675,12 +676,6 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
                               std::numeric_limits<double>::quiet_NaN());
             continue;
           }
-
-          // TODO
-          // if (accel_sq > SimConstants::kMaxAccelSquared) {
-          //   double scale = std::sqrt(SimConstants::kMaxAccelSquared /
-          //   accel_sq); accel = accel * scale;
-          // }
 
           velocities[id] = velocities[id] + (accel * dt_sub);
           Vec2 displacement = velocities[id] * dt_sub;
@@ -748,7 +743,7 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
 
     ++steps_since_live;
     if (live_writer != nullptr && steps_since_live >= live_view->frame_stride) {
-      live_writer->write(*bodies_tree);
+      live_writer->write(*bodies_tree, show_boxes);
       steps_since_live = 0;
     }
   }

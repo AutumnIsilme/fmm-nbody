@@ -154,12 +154,23 @@ std::unique_ptr<Box> create_quadtree(const std::vector<Body> &bodies,
   double height = max_y - min_y;
   double extent = std::max(width, height);
 
-  // 2. Add 10% padding so no particle lies directly on the outer box boundary
   if (extent < 1e-6) {
     extent = 2.0; // Default size if bodies are at a single point
   } else {
     extent *= 1.10;
   }
+
+  static double smooth_extent = 2.0;
+
+  extent = std::max(extent, 2.0);
+
+  if (extent > smooth_extent) {
+    smooth_extent = extent; // Instantly grow to fit escaping particles
+  } else {
+    smooth_extent = 0.98 * smooth_extent + 0.02 * extent; // Smooth shrink
+  }
+
+  extent = smooth_extent; // Use the smoothed extent for this frame
 
   double center_x = 0.5 * (min_x + max_x);
   double center_y = 0.5 * (min_y + max_y);
