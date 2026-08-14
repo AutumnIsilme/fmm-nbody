@@ -356,8 +356,6 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
     }
   }
 
-  const double softening_length = std::sqrt(SimConstants::kSofteningSquared);
-
   reset_expansions(strata);
 
   // --- Step 2.1 ---
@@ -545,34 +543,6 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
       ;
     }
   }
-}
-
-void run_fmm(int N, int bodies_per_box, double epsilon) {
-  auto start = Clock::now();
-
-  std::vector<Body> bodies =
-      bodies_from_rows(generate_2d_bodies_uniform_random(N, 10.0));
-  std::unique_ptr<Box> bodies_tree =
-      create_quadtree(bodies, static_cast<std::size_t>(bodies_per_box));
-  Strata strata = stratify_quadtree(*bodies_tree);
-  std::vector<Box *> leaf_boxes = leaves(strata);
-  populate_list_1(leaf_boxes);
-  populate_list_2(strata);
-  symmetrize_v_list(strata);
-  populate_list_3_and_4(leaf_boxes);
-
-  auto populated = Clock::now();
-
-  solve_fmm_forces(strata, leaf_boxes, epsilon);
-
-  auto solved = Clock::now();
-
-  std::cout << "Total time: " << seconds_since(start) << "\n";
-  std::cout << "Tree build + interaction lists: "
-            << std::chrono::duration<double>(populated - start).count() << "\n";
-  std::cout << "Force solve (steps 2.1-8): "
-            << std::chrono::duration<double>(solved - populated).count()
-            << "\n";
 }
 
 // Each step:
