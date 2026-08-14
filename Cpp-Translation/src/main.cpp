@@ -10,7 +10,7 @@ int main(int argc, char **argv) {
   double epsilon = (argc > 3) ? std::atof(argv[3]) : 1e-7;
   int num_steps = (argc > 4) ? std::atoi(argv[4]) : 5000;
   double dt = (argc > 5) ? std::atof(argv[5]) : 1e-3;
-  int rebuild_every = (argc > 6) ? std::atoi(argv[6]) : 10;
+  int rebuild_every = (argc > 6) ? std::atoi(argv[6]) : 1; // TODO
 
   std::cout << "N = " << N << ", bodies_per_box = " << bodies_per_box << "\n";
   std::cout << "Running FMM: N=" << N << " bodies_per_box=" << bodies_per_box

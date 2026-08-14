@@ -31,6 +31,7 @@ void log_step_diagnostics(int step, double current_time,
                           const std::vector<fmm::Vec2> &velocities,
                           const std::vector<fmm::Vec2> &forces, double eps_sq,
                           std::ostream &out = std::cout) {
+  return; // NOTE
   const std::size_t num_bodies = bodies.size();
   if (num_bodies == 0) {
     out << "==================== STEP " << step << " (t = " << std::fixed
@@ -456,17 +457,24 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
       const Body &body = leaf->bodies_in_box[i];
       std::complex<double> z(body.x(), body.y());
       for (Box *box : leaf->W) {
+        // Inside Step 5 (evaluating List 3 multipoles directly on leaf
+        // particles)
         std::complex<double> relative =
             z - std::complex<double>(box->centre.x, box->centre.y);
+
+        // --- FIX 2C: Soften List 3 separation ---
         relative = soften_separation(relative, softening_length);
+
         std::complex<double> force = box->multipole_expansion[0] / relative;
         std::complex<double> inv_rel_pow = 1.0 / relative;
         for (int k = 1; k <= p; ++k) {
-          inv_rel_pow /= relative; // relative^-(k+1)
+          inv_rel_pow /= relative;
           force += (-static_cast<double>(k)) *
                    box->multipole_expansion[static_cast<std::size_t>(k)] *
                    inv_rel_pow;
         }
+
+        // --- FIX: Gradient sign correction (-force.real(), force.imag()) ---
         leaf->forces[i] =
             leaf->forces[i] + Vec2(-force.real(), force.imag()) * body.mass();
       }
@@ -698,10 +706,11 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
             continue;
           }
 
-          if (accel_sq > SimConstants::kMaxAccelSquared) {
-            double scale = std::sqrt(SimConstants::kMaxAccelSquared / accel_sq);
-            accel = accel * scale;
-          }
+          // TODO
+          // if (accel_sq > SimConstants::kMaxAccelSquared) {
+          //   double scale = std::sqrt(SimConstants::kMaxAccelSquared /
+          //   accel_sq); accel = accel * scale;
+          // }
 
           velocities[id] = velocities[id] + (accel * dt_sub);
           Vec2 displacement = velocities[id] * dt_sub;

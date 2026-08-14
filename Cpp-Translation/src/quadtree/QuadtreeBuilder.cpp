@@ -2,10 +2,25 @@
 #include "../../include/quadtree/Colleagues.h"
 #include <array>
 #include <cmath>
+#include <iostream>
 #include <stdexcept>
 #include <string>
 #include <utility>
 namespace fmm {
+
+namespace {
+// Below this box extent, further halving no longer meaningfully separates
+// bodies given double precision, and/or corresponds to a physically
+// meaningless length scale (bodies this close together should already be
+// unresolvable given softening). Recursing past this point is how a
+// close-encounter pair (or truly coincident bodies) turns into infinite
+// recursion / a stack overflow in split(). Bodies that land in the same
+// box below this extent are just kept together as one (possibly
+// over-full) leaf; they'll be handled by direct pairwise summation for
+// that leaf instead of further multipole subdivision.
+constexpr double kMinBoxExtent = 1e-10;
+} // namespace
+
 void split(Box &box, const std::vector<Body> &bodies,
            std::size_t bodies_per_box) {
   const double split_size = box.extent / 2.0;
@@ -32,7 +47,6 @@ void split(Box &box, const std::vector<Body> &bodies,
   for (const Body &body : bodies) {
     const double nx = body.x() - box.root.x;
     const double ny = body.y() - box.root.y;
-
     if (!std::isfinite(nx) || !std::isfinite(ny)) {
       throw std::runtime_error(
           "split: body id=" + std::to_string(body.id) +
@@ -42,7 +56,6 @@ void split(Box &box, const std::vector<Body> &bodies,
           "Consider increasing softening (kSofteningSquared in "
           "FastMultipole.cpp) or reducing dt.");
     }
-
     if (nx < split_size && ny < split_size) {
       sub_box_bodies[0].push_back(body);
     } else if (nx < split_size && ny >= split_size) {
@@ -53,22 +66,56 @@ void split(Box &box, const std::vector<Body> &bodies,
       sub_box_bodies[3].push_back(body);
     }
   }
+
   std::array<bool, 4> keep_child = {true, true, true, true};
+
+  // First pass: recurse/assign bodies only. We deliberately do NOT touch
+  // colleagues here, because we don't yet know which siblings will survive
+  // this function -- a sibling with an empty bucket gets keep_child[i] =
+  // false below, its owned_children[i] unique_ptr is never moved into
+  // box.child_boxes, and the underlying Box is destroyed when
+  // owned_children goes out of scope at the end of this function. Writing a
+  // raw Box* to it into a surviving sibling's colleagues array before that
+  // point creates a dangling pointer the moment split() returns.
   for (int i = 0; i < 4; ++i) {
     Box *sub_box = raw_children[static_cast<std::size_t>(i)];
-    // Temporary placeholder colleagues (siblings only).
-    sub_box->colleagues = {raw_children[0], raw_children[1], raw_children[2],
-                           raw_children[3], nullptr,         nullptr,
-                           nullptr,         nullptr};
     auto &bucket = sub_box_bodies[static_cast<std::size_t>(i)];
     if (bucket.size() > bodies_per_box) {
-      split(*sub_box, bucket, bodies_per_box);
+      if (split_size > kMinBoxExtent) {
+        split(*sub_box, bucket, bodies_per_box);
+      } else {
+        std::cerr << "split: " << bucket.size()
+                  << " bodies could not be separated below extent "
+                  << split_size
+                  << " (likely near-coincident positions from an "
+                     "unresolved close encounter) -- keeping them in a "
+                     "single leaf instead of recursing further\n";
+        sub_box->bodies_in_box = std::move(bucket);
+      }
     } else if (bucket.empty()) {
       keep_child[static_cast<std::size_t>(i)] = false;
     } else {
       sub_box->bodies_in_box = std::move(bucket);
     }
   }
+
+  // Second pass: keep_child is now final, so it's safe to wire up sibling
+  // colleagues. Pruned siblings get nullptr instead of a soon-to-be-freed
+  // pointer.
+  for (int i = 0; i < 4; ++i) {
+    if (!keep_child[static_cast<std::size_t>(i)])
+      continue;
+    Box *sub_box = raw_children[static_cast<std::size_t>(i)];
+    sub_box->colleagues = {keep_child[0] ? raw_children[0] : nullptr,
+                           keep_child[1] ? raw_children[1] : nullptr,
+                           keep_child[2] ? raw_children[2] : nullptr,
+                           keep_child[3] ? raw_children[3] : nullptr,
+                           nullptr,
+                           nullptr,
+                           nullptr,
+                           nullptr};
+  }
+
   box.has_child_boxes = true;
   for (int i = 0; i < 4; ++i) {
     box.child_boxes[static_cast<std::size_t>(i)] =
