@@ -3,7 +3,7 @@ CXXFLAGS := -std=c++17 -Wall -Wextra -O2 -MMD -MP -Iinclude
 LDFLAGS  :=
 
 BUILD_DIR := build
-BIN       := fmm_run
+BIN       := fmm-run
 
 SRC := $(shell find src -name '*.cpp')
 OBJ := $(patsubst src/%.cpp,$(BUILD_DIR)/%.o,$(SRC))
