@@ -20,10 +20,6 @@ void graph_box(const Box &box, std::ostringstream &svg,
                const std::string &particle_colour = "dimgray",
                bool show_boxes = false);
 
-// Renders the full quadtree (leaf outlines + bodies) to an SVG file at
-// `filepath`.
-// The view box assumes the fixed [-1, 1] x [-1, 1] domain
-// used by `create_quadtree.
 void graph_quadtree(const Box &root, const std::string &filepath,
                     const std::string &box_colour = "blue",
                     const std::string &particle_colour = "dimgray",

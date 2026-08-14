@@ -19,133 +19,6 @@
 #include "../../include/quadtree/Strata.h"
 #include "../../include/quadtree/Visualisation.h"
 
-// --- Helper function to log iteration state --- TODO remove
-#include <algorithm>
-#include <cmath>
-#include <iomanip>
-#include <iostream>
-#include <vector>
-
-void log_step_diagnostics(int step, double current_time,
-                          const std::vector<fmm::Body> &bodies,
-                          const std::vector<fmm::Vec2> &velocities,
-                          const std::vector<fmm::Vec2> &forces, double eps_sq,
-                          std::ostream &out = std::cout) {
-  return; // NOTE
-  const std::size_t num_bodies = bodies.size();
-  if (num_bodies == 0) {
-    out << "==================== STEP " << step << " (t = " << std::fixed
-        << std::setprecision(4) << current_time << ") ====================\n";
-    out << "No active bodies remaining.\n";
-    out << "==================================================================="
-           "\n\n";
-    return;
-  }
-
-  const double G = 1.0;
-
-  double total_mass = 0.0;
-  double cm_x = 0.0, cm_y = 0.0;
-  double px = 0.0, py = 0.0;
-  double angular_momentum_z = 0.0;
-  double kinetic_energy = 0.0;
-  double potential_energy = 0.0;
-
-  double max_force_mag = 0.0;
-  double max_speed = 0.0;
-
-  // --- 1. Single-Body Accumulations ---
-  for (std::size_t i = 0; i < num_bodies; ++i) {
-    const auto &b = bodies[i];
-    double m = b.mass();
-    double x = b.x();
-    double y = b.y();
-
-    // Safely pull velocity and force with fallback if vectors are mismatched
-    double vx = (i < velocities.size()) ? velocities[i].x : 0.0;
-    double vy = (i < velocities.size()) ? velocities[i].y : 0.0;
-    double fx = (i < forces.size()) ? forces[i].x : 0.0;
-    double fy = (i < forces.size()) ? forces[i].y : 0.0;
-
-    total_mass += m;
-    cm_x += m * x;
-    cm_y += m * y;
-
-    px += m * vx;
-    py += m * vy;
-
-    angular_momentum_z += m * (x * vy - y * vx);
-
-    double speed_sq = vx * vx + vy * vy;
-    kinetic_energy += 0.5 * m * speed_sq;
-
-    double force_mag = std::sqrt(fx * fx + fy * fy);
-    max_force_mag = std::max(max_force_mag, force_mag);
-    max_speed = std::max(max_speed, std::sqrt(speed_sq));
-  }
-
-  if (total_mass > 0.0) {
-    cm_x /= total_mass;
-    cm_y /= total_mass;
-  }
-
-  // --- 2. Pairwise Potential Energy ---
-  for (std::size_t i = 0; i < num_bodies; ++i) {
-    for (std::size_t j = i + 1; j < num_bodies; ++j) {
-      double dx = bodies[j].x() - bodies[i].x();
-      double dy = bodies[j].y() - bodies[i].y();
-      double r2_soft = dx * dx + dy * dy + eps_sq;
-
-      potential_energy +=
-          0.5 * G * bodies[i].mass() * bodies[j].mass() * std::log(r2_soft);
-    }
-  }
-
-  double total_energy = kinetic_energy + potential_energy;
-
-  // --- 3. Structured Printout ---
-  out << "==================== STEP " << step << " (t = " << std::fixed
-      << std::setprecision(4) << current_time << ") ====================\n";
-  out << std::scientific << std::setprecision(6);
-  out << "Total Mass       : " << total_mass << "\n";
-  out << "Center of Mass   : (" << cm_x << ", " << cm_y << ")\n";
-  out << "Linear Momentum  : (" << px << ", " << py
-      << ")  [|P| = " << std::sqrt(px * px + py * py) << "]\n";
-  out << "Angular Mom (L)  : " << angular_momentum_z << "\n";
-  out << "Kinetic Energy   : " << kinetic_energy << "\n";
-  out << "Potential Energy : " << potential_energy << "\n";
-  out << "Total Energy     : " << total_energy << "\n";
-  out << "Max Speed        : " << max_speed << "\n";
-  out << "Max Force Mag    : " << max_force_mag << "\n";
-
-  // --- 4. Sample Tracking (Safely bounded) ---
-  if (num_bodies > 0) {
-    double v0_x = (!velocities.empty()) ? velocities[0].x : 0.0;
-    double v0_y = (!velocities.empty()) ? velocities[0].y : 0.0;
-    double f0_x = (!forces.empty()) ? forces[0].x : 0.0;
-    double f0_y = (!forces.empty()) ? forces[0].y : 0.0;
-
-    out << "--- Sample Body 0 State ---\n";
-    out << "  pos: (" << bodies[0].x() << ", " << bodies[0].y() << ")\n";
-    out << "  vel: (" << v0_x << ", " << v0_y << ")\n";
-    out << "  f_ext: (" << f0_x << ", " << f0_y << ")\n";
-  }
-
-  if (num_bodies > 1) {
-    double v1_x = (velocities.size() > 1) ? velocities[1].x : 0.0;
-    double v1_y = (velocities.size() > 1) ? velocities[1].y : 0.0;
-    double f1_x = (forces.size() > 1) ? forces[1].x : 0.0;
-    double f1_y = (forces.size() > 1) ? forces[1].y : 0.0;
-
-    out << "--- Sample Body 1 State ---\n";
-    out << "  pos: (" << bodies[1].x() << ", " << bodies[1].y() << ")\n";
-    out << "  vel: (" << v1_x << ", " << v1_y << ")\n";
-    out << "  f_ext: (" << f1_x << ", " << f1_y << ")\n";
-  }
-  out << "==================================================================="
-         "\n\n";
-}
-
 namespace fmm {
 
 namespace {
@@ -293,7 +166,6 @@ bodies_from_rows(const std::vector<std::vector<double>> &rows) {
 Vec2 pairwise_force(const Body &left, const Body &right) {
   std::complex<double> dz(right.x() - left.x(), right.y() - left.y());
 
-  // Derive the softening radius 'h' from your existing squared constant
   double h = std::sqrt(SimConstants::kSofteningSquared);
   double k = get_cubic_spline_force_factor(dz, h);
 
@@ -703,43 +575,6 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
         steps_since_rebuild = 0;
       }
     }
-
-    // TODO remove
-    std::size_t alive_count = 0;
-    for (Box *leaf : leaf_boxes) {
-      alive_count += leaf->bodies_in_box.size();
-    }
-
-    std::vector<Body> current_bodies;
-    std::vector<Vec2> current_velocities;
-    std::vector<Vec2> current_forces;
-    current_bodies.reserve(alive_count);
-    current_velocities.reserve(alive_count);
-    current_forces.reserve(alive_count);
-
-    for (Box *leaf : leaf_boxes) {
-      for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
-        const Body &body = leaf->bodies_in_box[i];
-        current_bodies.push_back(body);
-
-        // Guard global velocity vector lookup by ID
-        if (body.id < velocities.size()) {
-          current_velocities.push_back(velocities[body.id]);
-        } else {
-          current_velocities.push_back(Vec2(0.0, 0.0));
-        }
-
-        // Guard leaf force vector indexing
-        if (i < leaf->forces.size()) {
-          current_forces.push_back(leaf->forces[i]);
-        } else {
-          current_forces.push_back(Vec2(0.0, 0.0));
-        }
-      }
-    }
-
-    log_step_diagnostics(step, step * dt, current_bodies, current_velocities,
-                         current_forces, SimConstants::kSofteningSquared);
 
     ++steps_since_live;
     if (live_writer != nullptr && steps_since_live >= live_view->frame_stride) {
