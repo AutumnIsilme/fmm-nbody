@@ -9,15 +9,6 @@
 namespace fmm {
 
 namespace {
-// Below this box extent, further halving no longer meaningfully separates
-// bodies given double precision, and/or corresponds to a physically
-// meaningless length scale (bodies this close together should already be
-// unresolvable given softening). Recursing past this point is how a
-// close-encounter pair (or truly coincident bodies) turns into infinite
-// recursion / a stack overflow in split(). Bodies that land in the same
-// box below this extent are just kept together as one (possibly
-// over-full) leaf; they'll be handled by direct pairwise summation for
-// that leaf instead of further multipole subdivision.
 constexpr double kMinBoxExtent = 1e-10;
 } // namespace
 
@@ -69,14 +60,6 @@ void split(Box &box, const std::vector<Body> &bodies,
 
   std::array<bool, 4> keep_child = {true, true, true, true};
 
-  // First pass: recurse/assign bodies only. We deliberately do NOT touch
-  // colleagues here, because we don't yet know which siblings will survive
-  // this function -- a sibling with an empty bucket gets keep_child[i] =
-  // false below, its owned_children[i] unique_ptr is never moved into
-  // box.child_boxes, and the underlying Box is destroyed when
-  // owned_children goes out of scope at the end of this function. Writing a
-  // raw Box* to it into a surviving sibling's colleagues array before that
-  // point creates a dangling pointer the moment split() returns.
   for (int i = 0; i < 4; ++i) {
     Box *sub_box = raw_children[static_cast<std::size_t>(i)];
     auto &bucket = sub_box_bodies[static_cast<std::size_t>(i)];
@@ -99,9 +82,6 @@ void split(Box &box, const std::vector<Body> &bodies,
     }
   }
 
-  // Second pass: keep_child is now final, so it's safe to wire up sibling
-  // colleagues. Pruned siblings get nullptr instead of a soon-to-be-freed
-  // pointer.
   for (int i = 0; i < 4; ++i) {
     if (!keep_child[static_cast<std::size_t>(i)])
       continue;
@@ -135,7 +115,6 @@ std::unique_ptr<Box> create_quadtree(const std::vector<Body> &bodies,
                 box_0_root + Vec2(box_0_extent, box_0_extent) / 2.0));
   }
 
-  // 1. Compute dynamic bounding box enclosing all active bodies
   double min_x = bodies[0].x();
   double max_x = bodies[0].x();
   double min_y = bodies[0].y();
@@ -154,12 +133,23 @@ std::unique_ptr<Box> create_quadtree(const std::vector<Body> &bodies,
   double height = max_y - min_y;
   double extent = std::max(width, height);
 
-  // 2. Add 10% padding so no particle lies directly on the outer box boundary
   if (extent < 1e-6) {
     extent = 2.0; // Default size if bodies are at a single point
   } else {
     extent *= 1.10;
   }
+
+  static double smooth_extent = 2.0;
+
+  extent = std::max(extent, 2.0);
+
+  if (extent > smooth_extent) {
+    smooth_extent = extent; // Instantly grow to fit escaping particles
+  } else {
+    smooth_extent = 0.98 * smooth_extent + 0.02 * extent; // Smooth shrink
+  }
+
+  extent = smooth_extent; // Use the smoothed extent for this frame
 
   double center_x = 0.5 * (min_x + max_x);
   double center_y = 0.5 * (min_y + max_y);

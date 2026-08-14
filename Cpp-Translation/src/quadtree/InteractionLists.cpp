@@ -51,26 +51,6 @@ void populate_list_2(const Strata &strata) {
   }
 }
 
-namespace {
-// V-membership is supposed to be a symmetric relation: if box A is
-// well-separated from box B, B is equally well-separated from A. Unlike U
-// (which populate_list_1 explicitly patches for symmetry a few lines up),
-// nothing forces this for V -- populate_list_2 only ever inserts into
-// child->V from the perspective of a single ancestor's colleague set. If
-// any tree-level irregularity ever leaves that one-sided (A gets B in its
-// V, but B never gets A), B silently never applies the reciprocal M2L
-// force back onto A. That's a real force on one side of the pair with no
-// equal-and-opposite reaction anywhere -- a small, systematic, per-step
-// momentum leak that predates and does not require any close encounter,
-// which is exactly the drift-before-fireworks pattern being chased here.
-//
-// This is a diagnostic/defensive pass, not a substitute for verifying the
-// tree itself never produces an orphaned (un-mirrored) V relationship in
-// the first place -- if this measurably fixes the drift, that confirms
-// the mechanism and the next step is enforcing 2:1 level-balancing in the
-// quadtree so the underlying asymmetry can't occur.
-} // namespace
-
 void symmetrize_v_list(const Strata &strata) {
   for (const auto &level : strata) {
     for (Box *box : level) {

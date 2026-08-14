@@ -29,8 +29,7 @@ public:
   // A null entry means that quadrant held no bodies and was pruned
   std::array<std::unique_ptr<Box>, 4> child_boxes;
 
-  std::vector<Body>
-      bodies_in_box; // Only meaningful when has_child_boxes is false.
+  std::vector<Body> bodies_in_box;
 
   // Same-level neighbour boxes.
   std::array<Box *, 8> colleagues;
@@ -51,7 +50,6 @@ public:
       Vec2 centre_ = Vec2());
   ~Box();
 
-  // Boxes own their children, so they are move-only
   Box(const Box &) = delete;
   Box &operator=(const Box &) = delete;
   Box(Box &&) noexcept;

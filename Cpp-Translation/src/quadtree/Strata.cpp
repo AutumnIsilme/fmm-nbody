@@ -17,8 +17,6 @@ Strata stratify_quadtree(Box &root) {
           strata.push_back({});
         }
         for (auto &child : box->child_boxes) {
-          // Pruned (null) quadrants are appended too, then
-          // filtered out below.
           strata[i + 1].push_back(child.get());
         }
       }

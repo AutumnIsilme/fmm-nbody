@@ -21,8 +21,9 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                       double epsilon = 1e-7);
 
 void run_fmm_simulation(int N = 500, int bodies_per_box = 5,
-                        double epsilon = 1e-7, int num_steps = 1000,
-                        double dt = 1e-3, int rebuild_every = 10,
+                        double epsilon = 1e-7, int num_steps = 500,
+                        double dt = 1e-4, int rebuild_every = 1,
+                        bool show_boxes = false,
                         const LiveViewSettings *live_view = nullptr);
 
 } // namespace fmm
