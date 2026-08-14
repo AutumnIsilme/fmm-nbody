@@ -35,7 +35,7 @@ Execute `./fmm-run` with any custom flags you want to pass:
 
 Core physical constants and numerical parameters are defined in **`include/SimConstants.h`**. Adjust these constants to tune the numerical behavior of the simulation engine:
 
-* **`kSofteningSquared` (`0.000225` / $0.015^2$):** Softening length scale squared ($h^2$). Passed to the **Cubic Spline Softening** kernel to smoothly cap close-range pairwise forces and prevent singular acceleration spikes.
+* **`kSofteningSquared` (`0.000225` / `0.015^2`):** Softening length scale squared ($h^2$). Passed to the **Cubic Spline Softening** kernel to smoothly cap close-range pairwise forces and prevent singular acceleration spikes.
 * **`kTimestepSafetyFactor` (`0.05`):** Adaptive timestepping factor. Smaller values enforce smaller sub-steps for higher integration accuracy during high-velocity interactions.
 * **`kMaxSubstepsPerFrame` (`1000`):** Safety ceiling on adaptive sub-steps per frame to prevent execution hangs during tight orbital passes.
 * **`kMinSubstepDt` (`1e-7`):** The absolute floor for time-step resolution ($dt$) during sub-stepping iterations.
