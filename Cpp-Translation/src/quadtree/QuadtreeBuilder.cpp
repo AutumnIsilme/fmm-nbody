@@ -45,7 +45,7 @@ void split(Box &box, const std::vector<Body> &bodies,
           ", y=" + std::to_string(body.y()) +
           ") -- likely a force blowup from an unresolved close encounter. "
           "Consider increasing softening (kSofteningSquared in "
-          "FastMultipole.cpp) or reducing dt.");
+          "SimConstants.h) or reducing dt.");
     }
     if (nx < split_size && ny < split_size) {
       sub_box_bodies[0].push_back(body);
