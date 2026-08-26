@@ -4,7 +4,6 @@
 #include "../quadtree/Box.h"
 #include "../quadtree/Strata.h"
 #include "../quadtree/Vec2.h"
-#include <string>
 #include <vector>
 namespace fmm {
 
