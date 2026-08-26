@@ -1,4 +1,4 @@
-#include "../../include/quadtree/Body.h"
+#include "quadtree/Body.h"
 
 #include <stdexcept>
 #include <utility>

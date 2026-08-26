@@ -1,4 +1,4 @@
-#include "../../include/cloud/Cloud.h"
+#include "cloud/Cloud.h"
 
 #include <fstream>
 #include <random>

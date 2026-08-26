@@ -1,4 +1,4 @@
-#include "../../include/quadtree/InteractionLists.h"
+#include "quadtree/InteractionLists.h"
 #include <algorithm>
 #include <array>
 #include <cstddef>

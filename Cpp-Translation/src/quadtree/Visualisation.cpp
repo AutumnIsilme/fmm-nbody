@@ -1,4 +1,4 @@
-#include "../../include/quadtree/Visualisation.h"
+#include "quadtree/Visualisation.h"
 
 #include <fstream>
 #include <iostream>

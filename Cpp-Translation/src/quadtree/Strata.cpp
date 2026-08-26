@@ -1,4 +1,4 @@
-#include "../../include/quadtree/Strata.h"
+#include "quadtree/Strata.h"
 
 #include <cstddef>
 #include <utility>

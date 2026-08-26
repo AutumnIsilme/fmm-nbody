@@ -1,4 +1,4 @@
-#include "../../include/fmm/FastMultipole.h"
+#include "fmm/FastMultipole.h"
 
 #include <algorithm>
 #include <chrono>
@@ -11,13 +11,13 @@
 #include <stdexcept>
 #include <string>
 
-#include "../../include/SimConstants.h"
-#include "../../include/cloud/Cloud.h"
-#include "../../include/live_view/LiveSettings.h"
-#include "../../include/quadtree/InteractionLists.h"
-#include "../../include/quadtree/QuadtreeBuilder.h"
-#include "../../include/quadtree/Strata.h"
-#include "../../include/quadtree/Visualisation.h"
+#include "SimConstants.h"
+#include "cloud/Cloud.h"
+#include "live_view/LiveSettings.h"
+#include "quadtree/InteractionLists.h"
+#include "quadtree/QuadtreeBuilder.h"
+#include "quadtree/Strata.h"
+#include "quadtree/Visualisation.h"
 
 namespace fmm {
 

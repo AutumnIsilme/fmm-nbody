@@ -1,5 +1,5 @@
-#include "../../include/quadtree/QuadtreeBuilder.h"
-#include "../../include/quadtree/Colleagues.h"
+#include "quadtree/QuadtreeBuilder.h"
+#include "quadtree/Colleagues.h"
 #include <array>
 #include <cmath>
 #include <iostream>

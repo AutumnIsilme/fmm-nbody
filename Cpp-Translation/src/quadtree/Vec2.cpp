@@ -1,4 +1,4 @@
-#include "../../include/quadtree/Vec2.h"
+#include "quadtree/Vec2.h"
 
 namespace fmm {
 

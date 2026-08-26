@@ -1,4 +1,4 @@
-#include "../../include/quadtree/Box.h"
+#include "quadtree/Box.h"
 
 #include <sstream>
 #include <utility>

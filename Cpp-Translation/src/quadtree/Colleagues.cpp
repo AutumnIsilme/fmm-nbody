@@ -1,4 +1,4 @@
-#include "../../include/quadtree/Colleagues.h"
+#include "quadtree/Colleagues.h"
 
 #include <cstddef>
 
