@@ -8,10 +8,10 @@ namespace fmm {
 Body::Body() = default;
 
 Body::Body(std::vector<double> data_) : data(std::move(data_)) {
-  if (data.size() < 2) {
-    throw std::invalid_argument(
-        "Body must have at least an x and y coordinate");
-  }
+    if (data.size() < 2) {
+        throw std::invalid_argument(
+            "Body must have at least an x and y coordinate");
+    }
 }
 
 Body::Body(double x, double y) : data{x, y} {}
