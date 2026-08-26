@@ -1,5 +1,5 @@
-CXX      := g++
-CXXFLAGS := -std=c++23 -Wall -Wextra -O2 -MMD -MP -Iinclude
+CXX      := clang++
+CXXFLAGS := -std=c++23 -Wall -Wextra -O3 -march=native -MMD -MP -Iinclude
 LDFLAGS  :=
 
 BUILD_DIR := build
