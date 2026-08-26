@@ -117,19 +117,19 @@ std::unique_ptr<Box> create_quadtree(const std::vector<Body> &bodies,
                     box_0_root + Vec2(box_0_extent, box_0_extent) / 2.0));
     }
 
-    double min_x = bodies[0].x;
-    double max_x = bodies[0].x;
-    double min_y = bodies[0].y;
-    double max_y = bodies[0].y;
+    double min_x = -1.;
+    double max_x = 1.;
+    double min_y = -1.;
+    double max_y = 1.;
 
-    for (const auto &body : bodies) {
-        if (std::isfinite(body.x) && std::isfinite(body.y)) {
-            min_x = std::min(min_x, body.x);
-            max_x = std::max(max_x, body.x);
-            min_y = std::min(min_y, body.y);
-            max_y = std::max(max_y, body.y);
-        }
-    }
+    // for (const auto &body : bodies) {
+    //     if (std::isfinite(body.x) && std::isfinite(body.y)) {
+    //         min_x = std::min(min_x, body.x);
+    //         max_x = std::max(max_x, body.x);
+    //         min_y = std::min(min_y, body.y);
+    //         max_y = std::max(max_y, body.y);
+    //     }
+    // }
 
     double width = max_x - min_x;
     double height = max_y - min_y;
