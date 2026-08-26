@@ -4,6 +4,7 @@
 #include <chrono>
 #include <cmath>
 #include <complex>
+#include <cstddef>
 #include <filesystem>
 #include <iostream>
 #include <limits>
@@ -179,7 +180,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                       double epsilon) {
     auto solve_forces_start = Clock::now();
 
-    int p = static_cast<int>(std::ceil(-std::log2(epsilon)));
+    size_t p = static_cast<size_t>(std::ceil(-std::log2(epsilon)));
     if (p + 1 > kExpansionTerms) {
         throw std::runtime_error(
             "solve_fmm_forces: epsilon requires p=" + std::to_string(p) +
@@ -219,9 +220,9 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
             double mass = body.mass;
             leaf->multipole_expansion[0] += mass;
             std::complex<double> z_pow(1.0, 0.0);
-            for (int k = 1; k <= p; ++k) {
+            for (size_t k = 1; k <= p; ++k) {
                 z_pow *= z_i;
-                leaf->multipole_expansion[static_cast<std::size_t>(k)] +=
+                leaf->multipole_expansion[k] +=
                     (-mass / static_cast<double>(k)) * z_pow;
             }
         }
@@ -230,7 +231,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
     auto solve_forces_step_2_1 = Clock::now();
 
     // --- Step 2.2 ---
-    for (int i = static_cast<int>(strata.size()) - 2; i >= 2; --i) {
+    for (size_t i = strata.size() - 2; i >= 2; --i) {
         for (Box *box : strata[static_cast<std::size_t>(i)]) {
             if (!box->has_child_boxes)
                 continue;
@@ -241,15 +242,14 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                 std::complex<double> z_0(child->centre.x - box->centre.x,
                                          child->centre.y - box->centre.y);
                 box->multipole_expansion[0] += child->multipole_expansion[0];
-                for (int l = 1; l <= p; ++l) {
-                    for (int k = 1; k <= l; ++k) {
-                        box->multipole_expansion[static_cast<std::size_t>(l)] +=
-                            child->multipole_expansion[static_cast<std::size_t>(
-                                k)] *
+                for (size_t l = 1; l <= p; ++l) {
+                    for (size_t k = 1; k <= l; ++k) {
+                        box->multipole_expansion[l] +=
+                            child->multipole_expansion[k] *
                             std::pow(z_0, l - k) * binomial(l - 1, k - 1);
                     }
                     double sign = (l % 2 == 0) ? 1.0 : -1.0;
-                    box->multipole_expansion[static_cast<std::size_t>(l)] +=
+                    box->multipole_expansion[l] +=
                         sign *
                         (child->multipole_expansion[0] /
                          static_cast<double>(l)) *
@@ -293,27 +293,26 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
 
                 std::complex<double> sum0(0.0, 0.0);
                 std::complex<double> neg_pow(1.0, 0.0);
-                for (int k = 1; k <= p; ++k) {
+                for (size_t k = 1; k <= p; ++k) {
                     neg_pow *= neg_recip_z_0;
                     sum0 +=
-                        b_j->multipole_expansion[static_cast<std::size_t>(k)] *
+                        b_j->multipole_expansion[k] *
                         neg_pow;
                 }
                 box->local_expansion[0] +=
                     b_j->multipole_expansion[0] * std::log(-z_0) + sum0;
 
-                for (int l = 1; l <= p; ++l) {
+                for (size_t l = 1; l <= p; ++l) {
                     std::complex<double> inner =
                         -b_j->multipole_expansion[0] / static_cast<double>(l);
                     std::complex<double> neg_pow_k(1.0, 0.0);
-                    for (int k = 1; k <= p; ++k) {
+                    for (size_t k = 1; k <= p; ++k) {
                         neg_pow_k *= neg_recip_z_0;
                         inner +=
-                            b_j->multipole_expansion[static_cast<std::size_t>(
-                                k)] *
+                            b_j->multipole_expansion[k] *
                             neg_pow_k * binomial(l + k - 1, k - 1);
                     }
-                    box->local_expansion[static_cast<std::size_t>(l)] +=
+                    box->local_expansion[l] +=
                         std::pow(recip_z_0, l) * inner;
                 }
             }
@@ -336,11 +335,11 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                 std::complex<double> force =
                     box->multipole_expansion[0] / relative;
                 std::complex<double> inv_rel_pow = 1.0 / relative;
-                for (int k = 1; k <= p; ++k) {
+                for (size_t k = 1; k <= p; ++k) {
                     inv_rel_pow /= relative;
                     force +=
                         (-static_cast<double>(k)) *
-                        box->multipole_expansion[static_cast<std::size_t>(k)] *
+                        box->multipole_expansion[k] *
                         inv_rel_pow;
                 }
 
@@ -364,8 +363,8 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                         std::complex<double>(body.x, body.y) - centre;
                     double mass = body.mass;
                     box->local_expansion[0] += mass * std::log(-z);
-                    for (int l = 1; l <= p; ++l) {
-                        box->local_expansion[static_cast<std::size_t>(l)] -=
+                    for (size_t l = 1; l <= p; ++l) {
+                        box->local_expansion[l] -=
                             mass / (static_cast<double>(l) * std::pow(z, l));
                     }
                 }
@@ -388,10 +387,10 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                 std::complex<double> z =
                     centre -
                     std::complex<double>(child->centre.x, child->centre.y);
-                for (int l = 0; l <= p; ++l) {
-                    for (int k = l; k <= p; ++k) {
-                        child->local_expansion[static_cast<std::size_t>(l)] +=
-                            box->local_expansion[static_cast<std::size_t>(k)] *
+                for (size_t l = 0; l <= p; ++l) {
+                    for (size_t k = l; k <= p; ++k) {
+                        child->local_expansion[l] +=
+                            box->local_expansion[k] *
                             std::pow(-z, k - l) * binomial(k, l);
                     }
                 }
@@ -409,9 +408,9 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
             std::complex<double> z =
                 std::complex<double>(body.x, body.y) - centre;
             std::complex<double> force(0.0, 0.0);
-            for (int l = 1; l <= p; ++l) {
+            for (size_t l = 1; l <= p; ++l) {
                 force += static_cast<double>(l) *
-                         leaf->local_expansion[static_cast<std::size_t>(l)] *
+                         leaf->local_expansion[l] *
                          std::pow(z, l - 1);
             }
             leaf->forces[i] =
