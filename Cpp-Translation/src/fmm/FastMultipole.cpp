@@ -154,15 +154,15 @@ class LiveWriter {
 };
 } // namespace
 
-std::vector<Body>
-bodies_from_rows(const std::vector<std::vector<double>> &rows) {
-    std::vector<Body> result;
-    result.reserve(rows.size());
-    for (const auto &row : rows) {
-        result.emplace_back(row);
-    }
-    return result;
-}
+// std::vector<Body>
+// bodies_from_rows(const std::vector<std::vector<double>> &rows) {
+//     std::vector<Body> result;
+//     result.reserve(rows.size());
+//     for (const auto &row : rows) {
+//         result.emplace_back(row);
+//     }
+//     return result;
+// }
 
 Vec2 pairwise_force(const Body &left, const Body &right) {
     std::complex<double> dz(right.x - left.x, right.y - left.y);
@@ -177,6 +177,8 @@ Vec2 pairwise_force(const Body &left, const Body &right) {
 
 void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                       double epsilon) {
+    auto solve_forces_start = Clock::now();
+
     int p = static_cast<int>(std::ceil(-std::log2(epsilon)));
     if (p + 1 > kExpansionTerms) {
         throw std::runtime_error(
@@ -207,6 +209,8 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
 
     reset_expansions(strata);
 
+    auto solve_forces_step_1 = Clock::now();
+
     // --- Step 2.1 ---
     for (Box *leaf : leaf_boxes) {
         for (const Body &body : leaf->bodies_in_box) {
@@ -222,6 +226,8 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
             }
         }
     }
+
+    auto solve_forces_step_2_1 = Clock::now();
 
     // --- Step 2.2 ---
     for (int i = static_cast<int>(strata.size()) - 2; i >= 2; --i) {
@@ -253,6 +259,8 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
         }
     }
 
+    auto solve_forces_step_2_2 = Clock::now();
+
     // --- Step 3 ---
 
     // Zero-init forces on every leaf
@@ -271,6 +279,8 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
         }
         accumulate_self_pairwise_forces(leaf->bodies_in_box, leaf->forces);
     }
+
+    auto solve_forces_step_3 = Clock::now();
 
     // --- Step 4 ---
     for (std::size_t i = 2; i < strata.size(); ++i) {
@@ -310,6 +320,8 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
         }
     }
 
+    auto solve_forces_step_4 = Clock::now();
+
     // --- Step 5 ---
     for (Box *leaf : leaf_boxes) {
         for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
@@ -338,6 +350,8 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
         }
     }
 
+    auto solve_forces_step_5 = Clock::now();
+
     // --- Step 6 ---
     for (std::size_t i = 2; i < strata.size(); ++i) {
         for (Box *box : strata[i]) {
@@ -358,6 +372,8 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
             }
         }
     }
+
+    auto solve_forces_step_6 = Clock::now();
 
     // --- Step 7 ---
     for (std::size_t i = 2; i < strata.size(); ++i) {
@@ -383,6 +399,8 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
         }
     }
 
+    auto solve_forces_step_7 = Clock::now();
+
     // --- Step 8 ---
     for (Box *leaf : leaf_boxes) {
         std::complex<double> centre(leaf->centre.x, leaf->centre.y);
@@ -400,6 +418,20 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                 leaf->forces[i] + Vec2(-force.real(), force.imag()) * body.mass;
         }
     }
+
+    auto solve_forces_step_8 = Clock::now();
+
+    std::cout << "1: " << solve_forces_step_1 - solve_forces_start
+              << ", 2.1: " << solve_forces_step_2_1 - solve_forces_step_1
+              << ", 2.2: " << solve_forces_step_2_2 - solve_forces_step_2_1
+              << ", 3: " << solve_forces_step_3 - solve_forces_step_2_2
+              << ", 4: " << solve_forces_step_4 - solve_forces_step_3
+              << ", 5: " << solve_forces_step_5 - solve_forces_step_4
+              << ", 6: " << solve_forces_step_6 - solve_forces_step_5
+              << ", 7: " << solve_forces_step_7 - solve_forces_step_6
+              << ", 8: " << solve_forces_step_8 - solve_forces_step_7
+              << ", total: " << solve_forces_step_8 - solve_forces_start
+              << std::endl;
 }
 
 // Each step:

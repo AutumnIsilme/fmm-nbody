@@ -14,7 +14,7 @@ struct Body {
     std::size_t id = 0;
 
     Body();
-    explicit Body(std::vector<double> data_);
+    // explicit Body(std::vector<double> data_);
     Body(double x, double y);
     Body(double x, double y, double vx, double vy, double mass);
 
