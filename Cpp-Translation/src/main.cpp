@@ -1,4 +1,3 @@
-#include <cstdlib>
 #include <iostream>
 #include <string>
 
@@ -23,7 +22,8 @@ void print_usage(const char *prog_name) {
            "rendering (default)\n"
         << "      --show-boxes            Enable background quadtree box "
            "rendering \n"
-        << "  -f, --frame-stride          Set frame stride for output (default: 1)\n"
+        << "  -f, --frame-stride          Set frame stride for output "
+           "(default: 1)\n"
         << "  -h, --help                  Show this help message and exit\n";
 }
 

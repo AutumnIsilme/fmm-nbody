@@ -37,13 +37,13 @@ void split(Box &box, const std::vector<Body> &bodies,
     // Partition bodies by quadrant.
     std::array<std::vector<Body>, 4> sub_box_bodies;
     for (const Body &body : bodies) {
-        const double nx = body.x() - box.root.x;
-        const double ny = body.y() - box.root.y;
+        const double nx = body.x - box.root.x;
+        const double ny = body.y - box.root.y;
         if (!std::isfinite(nx) || !std::isfinite(ny)) {
             throw std::runtime_error(
                 "split: body id=" + std::to_string(body.id) +
-                " has a non-finite position (x=" + std::to_string(body.x()) +
-                ", y=" + std::to_string(body.y()) +
+                " has a non-finite position (x=" + std::to_string(body.x) +
+                ", y=" + std::to_string(body.y) +
                 ") -- likely a force blowup from an unresolved close "
                 "encounter. "
                 "Consider increasing softening (kSofteningSquared in "
@@ -117,17 +117,17 @@ std::unique_ptr<Box> create_quadtree(const std::vector<Body> &bodies,
                     box_0_root + Vec2(box_0_extent, box_0_extent) / 2.0));
     }
 
-    double min_x = bodies[0].x();
-    double max_x = bodies[0].x();
-    double min_y = bodies[0].y();
-    double max_y = bodies[0].y();
+    double min_x = bodies[0].x;
+    double max_x = bodies[0].x;
+    double min_y = bodies[0].y;
+    double max_y = bodies[0].y;
 
     for (const auto &body : bodies) {
-        if (std::isfinite(body.x()) && std::isfinite(body.y())) {
-            min_x = std::min(min_x, body.x());
-            max_x = std::max(max_x, body.x());
-            min_y = std::min(min_y, body.y());
-            max_y = std::max(max_y, body.y());
+        if (std::isfinite(body.x) && std::isfinite(body.y)) {
+            min_x = std::min(min_x, body.x);
+            max_x = std::max(max_x, body.x);
+            min_y = std::min(min_y, body.y);
+            max_y = std::max(max_y, body.y);
         }
     }
 

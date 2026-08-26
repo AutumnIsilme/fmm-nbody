@@ -1,11 +1,14 @@
 #pragma once
-#include <array>
 #include <cstddef>
 #include <vector>
 namespace fmm {
-class Body {
+struct Body {
   public:
-    std::vector<double> data;
+    double x;
+    double y;
+    double vx;
+    double vy;
+    double mass;
 
     // stable per-body id. Allows particles to be matched between steps
     std::size_t id = 0;
@@ -13,15 +16,17 @@ class Body {
     Body();
     explicit Body(std::vector<double> data_);
     Body(double x, double y);
-    double x() const;
-    double y() const;
-    double mass() const;
-    std::array<double, 2> position() const;
-    double operator[](std::size_t index) const;
+    Body(double x, double y, double vx, double vy, double mass);
+
+    // double x() const;
+    // double y() const;
+    // double mass() const;
+    // std::array<double, 2> position() const;
+    // double operator[](std::size_t index) const;
 
     void set_position(double new_x, double new_y) {
-        data[0] = new_x;
-        data[1] = new_y;
+        x = new_x;
+        y = new_y;
     }
 };
 } // namespace fmm

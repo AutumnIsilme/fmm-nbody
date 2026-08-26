@@ -31,9 +31,9 @@ std::vector<std::size_t> remove_escaped_bodies(std::vector<Box *> &leaf_boxes,
         std::vector<Body> kept;
         kept.reserve(leaf->bodies_in_box.size());
         for (const Body &body : leaf->bodies_in_box) {
-            double dx = body.x() - domain_centre.x;
-            double dy = body.y() - domain_centre.y;
-            bool finite = std::isfinite(body.x()) && std::isfinite(body.y());
+            double dx = body.x - domain_centre.x;
+            double dy = body.y - domain_centre.y;
+            bool finite = std::isfinite(body.x) && std::isfinite(body.y);
             bool escaped = finite && (dx * dx + dy * dy > escape_radius_sq);
             if (!finite || escaped) {
                 removed_ids.push_back(body.id);
@@ -165,12 +165,12 @@ bodies_from_rows(const std::vector<std::vector<double>> &rows) {
 }
 
 Vec2 pairwise_force(const Body &left, const Body &right) {
-    std::complex<double> dz(right.x() - left.x(), right.y() - left.y());
+    std::complex<double> dz(right.x - left.x, right.y - left.y);
 
     double h = std::sqrt(SimConstants::kSofteningSquared);
     double k = get_cubic_spline_force_factor(dz, h);
 
-    double mass_product = left.mass() * right.mass();
+    double mass_product = left.mass * right.mass;
 
     return Vec2(dz.real() * k * mass_product, dz.imag() * k * mass_product);
 }
@@ -190,7 +190,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
         std::vector<Body> finite_only;
         finite_only.reserve(leaf->bodies_in_box.size());
         for (const Body &body : leaf->bodies_in_box) {
-            if (std::isfinite(body.x()) && std::isfinite(body.y())) {
+            if (std::isfinite(body.x) && std::isfinite(body.y)) {
                 finite_only.push_back(body);
             } else {
                 std::cerr
@@ -210,9 +210,9 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
     // --- Step 2.1 ---
     for (Box *leaf : leaf_boxes) {
         for (const Body &body : leaf->bodies_in_box) {
-            std::complex<double> z_i(body.x() - leaf->centre.x,
-                                     body.y() - leaf->centre.y);
-            double mass = body.mass();
+            std::complex<double> z_i(body.x - leaf->centre.x,
+                                     body.y - leaf->centre.y);
+            double mass = body.mass;
             leaf->multipole_expansion[0] += mass;
             std::complex<double> z_pow(1.0, 0.0);
             for (int k = 1; k <= p; ++k) {
@@ -314,7 +314,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
     for (Box *leaf : leaf_boxes) {
         for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
             const Body &body = leaf->bodies_in_box[i];
-            std::complex<double> z(body.x(), body.y());
+            std::complex<double> z(body.x, body.y);
             for (Box *box : leaf->W) {
                 // Inside Step 5 (evaluating List 3 multipoles directly on leaf
                 // particles)
@@ -332,9 +332,8 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                         inv_rel_pow;
                 }
 
-                leaf->forces[i] =
-                    leaf->forces[i] +
-                    Vec2(-force.real(), force.imag()) * body.mass();
+                leaf->forces[i] = leaf->forces[i] +
+                                  Vec2(-force.real(), force.imag()) * body.mass;
             }
         }
     }
@@ -348,8 +347,8 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
             for (Box *big_leaf : box->X) {
                 for (const Body &body : big_leaf->bodies_in_box) {
                     std::complex<double> z =
-                        std::complex<double>(body.x(), body.y()) - centre;
-                    double mass = body.mass();
+                        std::complex<double>(body.x, body.y) - centre;
+                    double mass = body.mass;
                     box->local_expansion[0] += mass * std::log(-z);
                     for (int l = 1; l <= p; ++l) {
                         box->local_expansion[static_cast<std::size_t>(l)] -=
@@ -390,15 +389,15 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
         for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
             const Body &body = leaf->bodies_in_box[i];
             std::complex<double> z =
-                std::complex<double>(body.x(), body.y()) - centre;
+                std::complex<double>(body.x, body.y) - centre;
             std::complex<double> force(0.0, 0.0);
             for (int l = 1; l <= p; ++l) {
                 force += static_cast<double>(l) *
                          leaf->local_expansion[static_cast<std::size_t>(l)] *
                          std::pow(z, l - 1);
             }
-            leaf->forces[i] = leaf->forces[i] +
-                              Vec2(-force.real(), force.imag()) * body.mass();
+            leaf->forces[i] =
+                leaf->forces[i] + Vec2(-force.real(), force.imag()) * body.mass;
         }
     }
 }
@@ -419,8 +418,7 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
 
     auto start = Clock::now();
 
-    std::vector<Body> bodies =
-        bodies_from_rows(generate_2d_bodies_uniform_random(N, 10.0));
+    std::vector<Body> bodies = generate_2d_bodies_uniform_random(N, 10.0);
 
     for (std::size_t i = 0; i < bodies.size(); ++i) {
         bodies[i].id = i;
@@ -440,7 +438,7 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
     std::vector<double> masses(static_cast<std::size_t>(N), 0.0);
     for (Box *leaf : leaf_boxes) {
         for (const Body &body : leaf->bodies_in_box) {
-            masses[body.id] = body.mass();
+            masses[body.id] = body.mass;
         }
     }
 
@@ -544,8 +542,8 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
 
                     velocities[id] = velocities[id] + (accel * dt_sub);
                     Vec2 displacement = velocities[id] * dt_sub;
-                    body.set_position(body.x() + displacement.x,
-                                      body.y() + displacement.y);
+                    body.set_position(body.x + displacement.x,
+                                      body.y + displacement.y);
                 }
             }
 

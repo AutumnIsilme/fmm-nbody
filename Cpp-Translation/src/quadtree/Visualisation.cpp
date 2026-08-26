@@ -43,7 +43,7 @@ void graph_box(const Box &box, std::ostringstream &svg,
 
     write_box_outline(svg, box, box_colour, show_boxes);
     for (const Body &body : box.bodies_in_box) {
-        svg << "  <circle cx=\"" << body.x() << "\" cy=\"" << body.y()
+        svg << "  <circle cx=\"" << body.x << "\" cy=\"" << body.y
             << "\" r=\"0.003\" fill=\"" << particle_colour << "\" />\n";
     }
 }
