@@ -17,7 +17,7 @@ Strata stratify_quadtree(Box &root) {
                     strata.push_back({});
                 }
                 for (auto &child : box->child_boxes) {
-                    strata[i + 1].push_back(child.get());
+                    strata[i + 1].push_back(child);
                 }
             }
         }

@@ -1,7 +1,9 @@
 #include "quadtree/QuadtreeBuilder.h"
+#include "quadtree/Box.h"
 #include "quadtree/Colleagues.h"
 #include <array>
 #include <cmath>
+#include <cstddef>
 #include <iostream>
 #include <stdexcept>
 #include <string>
@@ -13,26 +15,21 @@ constexpr double kMinBoxExtent = 1e-10;
 } // namespace
 
 void split(Box &box, const std::vector<Body> &bodies,
-           std::size_t bodies_per_box) {
+           std::size_t bodies_per_box, BoxAllocator& box_alloc) {
     const double split_size = box.extent / 2.0;
-    std::vector<Box *> ancestors = box.ancestors;
-    ancestors.push_back(&box);
     // Quadrant roots
     // 0 = bottom-left, 1 = top-left, 2 = bottom-right, 3 = top-right.
     const std::array<Vec2, 4> roots = {box.root,
                                        box.root + Vec2(0.0, split_size),
                                        box.root + Vec2(split_size, 0.0),
                                        box.root + Vec2(split_size, split_size)};
-    std::array<std::unique_ptr<Box>, 4> owned_children;
-    std::array<Box *, 4> raw_children{};
-    for (int i = 0; i < 4; ++i) {
-        Vec2 child_centre = roots[static_cast<std::size_t>(i)] +
+    Box* children[4];
+    for (size_t i = 0; i < 4; ++i) {
+        Vec2 child_centre = roots[i] +
                             Vec2(split_size, split_size) / 2.0;
-        owned_children[static_cast<std::size_t>(i)] =
-            std::unique_ptr<Box>(new Box(roots[static_cast<std::size_t>(i)],
-                                         split_size, ancestors, child_centre));
-        raw_children[static_cast<std::size_t>(i)] =
-            owned_children[static_cast<std::size_t>(i)].get();
+        children[i] = box_alloc.make_box();
+        *children[i] = Box(roots[i],
+                                         split_size, child_centre);
     }
     // Partition bodies by quadrant.
     std::array<std::vector<Body>, 4> sub_box_bodies;
@@ -62,12 +59,12 @@ void split(Box &box, const std::vector<Body> &bodies,
 
     std::array<bool, 4> keep_child = {true, true, true, true};
 
-    for (int i = 0; i < 4; ++i) {
-        Box *sub_box = raw_children[static_cast<std::size_t>(i)];
-        auto &bucket = sub_box_bodies[static_cast<std::size_t>(i)];
+    for (size_t i = 0; i < 4; ++i) {
+        Box *sub_box = children[i];
+        auto &bucket = sub_box_bodies[i];
         if (bucket.size() > bodies_per_box) {
             if (split_size > kMinBoxExtent) {
-                split(*sub_box, bucket, bodies_per_box);
+                split(*sub_box, bucket, bodies_per_box, box_alloc);
             } else {
                 std::cerr << "split: " << bucket.size()
                           << " bodies could not be separated below extent "
@@ -78,20 +75,20 @@ void split(Box &box, const std::vector<Body> &bodies,
                 sub_box->bodies_in_box = std::move(bucket);
             }
         } else if (bucket.empty()) {
-            keep_child[static_cast<std::size_t>(i)] = false;
+            keep_child[i] = false;
         } else {
             sub_box->bodies_in_box = std::move(bucket);
         }
     }
 
-    for (int i = 0; i < 4; ++i) {
-        if (!keep_child[static_cast<std::size_t>(i)])
+    for (size_t i = 0; i < 4; ++i) {
+        if (!keep_child[i])
             continue;
-        Box *sub_box = raw_children[static_cast<std::size_t>(i)];
-        sub_box->colleagues = {keep_child[0] ? raw_children[0] : nullptr,
-                               keep_child[1] ? raw_children[1] : nullptr,
-                               keep_child[2] ? raw_children[2] : nullptr,
-                               keep_child[3] ? raw_children[3] : nullptr,
+        Box *sub_box = children[i];
+        sub_box->colleagues = {keep_child[0] ? children[0] : nullptr,
+                               keep_child[1] ? children[1] : nullptr,
+                               keep_child[2] ? children[2] : nullptr,
+                               keep_child[3] ? children[3] : nullptr,
                                nullptr,
                                nullptr,
                                nullptr,
@@ -99,22 +96,21 @@ void split(Box &box, const std::vector<Body> &bodies,
     }
 
     box.has_child_boxes = true;
-    for (int i = 0; i < 4; ++i) {
-        box.child_boxes[static_cast<std::size_t>(i)] =
-            keep_child[static_cast<std::size_t>(i)]
-                ? std::move(owned_children[static_cast<std::size_t>(i)])
+    for (size_t i = 0; i < 4; ++i) {
+        box.child_boxes[i] =
+            keep_child[i]
+                ? children[i]
                 : nullptr;
     }
 }
 
-std::unique_ptr<Box> create_quadtree(const std::vector<Body> &bodies,
-                                     std::size_t bodies_per_box) {
+Box *create_quadtree(const std::vector<Body> &bodies,
+                                     std::size_t bodies_per_box, BoxAllocator& box_alloc) {
     if (bodies.empty()) {
         const Vec2 box_0_root(-1.0, -1.0);
         const double box_0_extent = 2.0;
-        return std::unique_ptr<Box>(
-            new Box(box_0_root, box_0_extent, std::vector<Box *>{},
-                    box_0_root + Vec2(box_0_extent, box_0_extent) / 2.0));
+        return new Box(box_0_root, box_0_extent,
+                    box_0_root + Vec2(box_0_extent, box_0_extent) / 2.0);
     }
 
     double min_x = -1.;
@@ -159,14 +155,13 @@ std::unique_ptr<Box> create_quadtree(const std::vector<Body> &bodies,
     Vec2 box_0_root(center_x - 0.5 * extent, center_y - 0.5 * extent);
     double box_0_extent = extent;
 
-    auto box_0 = std::unique_ptr<Box>(
-        new Box(box_0_root, box_0_extent, std::vector<Box *>{},
-                box_0_root + Vec2(box_0_extent, box_0_extent) / 2.0));
+    auto box_0 = new Box(box_0_root, box_0_extent,
+                box_0_root + Vec2(box_0_extent, box_0_extent) / 2.0);
 
     if (bodies.size() <= bodies_per_box) {
         box_0->bodies_in_box = bodies;
     } else {
-        split(*box_0, bodies, bodies_per_box);
+        split(*box_0, bodies, bodies_per_box, box_alloc);
         colleagify_quadtree(*box_0);
     }
     return box_0;

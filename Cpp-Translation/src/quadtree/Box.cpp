@@ -1,18 +1,16 @@
 #include "quadtree/Box.h"
 
 #include <sstream>
-#include <utility>
 
 namespace fmm {
 
 Box::Box()
-    : root(), extent(0.0), ancestors(), has_child_boxes(false), child_boxes(),
+    : root(), extent(0.0), has_child_boxes(false), child_boxes(),
       bodies_in_box(), colleagues{}, U(), V(), W(), X(), centre(),
       multipole_expansion{}, local_expansion{}, forces() {}
 
-Box::Box(Vec2 root_, double extent_, std::vector<Box *> ancestors_,
-         Vec2 centre_)
-    : root(root_), extent(extent_), ancestors(std::move(ancestors_)),
+Box::Box(Vec2 root_, double extent_, Vec2 centre_)
+    : root(root_), extent(extent_),
       has_child_boxes(false), child_boxes(), bodies_in_box(), colleagues{}, U(),
       V(), W(), X(), centre(centre_), multipole_expansion{}, local_expansion{},
       forces() {}
@@ -43,13 +41,6 @@ std::string Box::repr() const {
     std::ostringstream oss;
     oss << "Box[root=(" << root.x << ", " << root.y << ")"
         << ", extent=" << extent << ", parent=";
-    if (ancestors.empty()) {
-        oss << "None";
-    } else {
-        const Box *parent = ancestors.back();
-        oss << "(" << parent->root.x << ", " << parent->root.y << ")x"
-            << parent->extent;
-    }
     oss << ", has_child_boxes=" << (has_child_boxes ? "true" : "false")
         << ", num_child_boxes=" << num_child_boxes()
         << ", num_bodies_in_box=" << bodies_in_box.size() << "]";
@@ -58,6 +49,17 @@ std::string Box::repr() const {
 
 std::ostream &operator<<(std::ostream &os, const Box &box) {
     return os << box.repr();
+}
+
+Box *BoxAllocator::make_box() {
+    Box *box = &boxes[alloc_point];
+    *box = {};
+    alloc_point++;
+    return box;
+}
+
+void BoxAllocator::clear_allocator() {
+    alloc_point = 0;
 }
 
 } // namespace fmm

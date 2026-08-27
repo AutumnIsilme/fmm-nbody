@@ -2,7 +2,6 @@
 
 #include <array>
 #include <complex>
-#include <memory>
 #include <ostream>
 #include <set>
 #include <string>
@@ -15,19 +14,19 @@ namespace fmm {
 
 // Number of multipole/local expansion coefficients retained per box
 constexpr int kExpansionTerms = 25;
+constexpr size_t kNumBoxes = 43264;
 
 class Box {
   public:
-    Vec2 root;                    // Bottom-left corner of this box.
-    double extent;                // Side length of this box.
-    std::vector<Box *> ancestors; // Root-most-first chain of parent boxes.
+    Vec2 root;     // Bottom-left corner of this box.
+    double extent; // Side length of this box.
 
     bool has_child_boxes;
     // Child quadrant order:
     // 0 = (root),                   1 = (root + (0, split_size)),
     // 2 = (root + (split_size, 0)), 3 = (root + (split_size, split_size)).
     // A null entry means that quadrant held no bodies and was pruned
-    std::array<std::unique_ptr<Box>, 4> child_boxes;
+    Box *child_boxes[4];
 
     std::vector<Body> bodies_in_box;
 
@@ -46,8 +45,7 @@ class Box {
     std::vector<Vec2> forces;
 
     Box();
-    Box(Vec2 root_, double extent_, std::vector<Box *> ancestors_ = {},
-        Vec2 centre_ = Vec2());
+    Box(Vec2 root_, double extent_, Vec2 centre_ = Vec2());
     ~Box();
 
     Box(const Box &) = delete;
@@ -61,6 +59,20 @@ class Box {
     int num_child_boxes() const;
 
     std::string repr() const;
+};
+
+struct BoxAllocator {
+    Box boxes[kNumBoxes];
+    Box *strata[kNumBoxes];
+    static constexpr size_t nboxes = kNumBoxes;
+
+    BoxAllocator() = default;
+
+    void clear_allocator();
+    Box *make_box();
+
+  private:
+    size_t alloc_point = 0;
 };
 
 std::ostream &operator<<(std::ostream &os, const Box &box);

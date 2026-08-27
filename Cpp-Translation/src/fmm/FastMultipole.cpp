@@ -15,6 +15,7 @@
 #include "SimConstants.h"
 #include "cloud/Cloud.h"
 #include "live_view/LiveSettings.h"
+#include "quadtree/Box.h"
 #include "quadtree/InteractionLists.h"
 #include "quadtree/QuadtreeBuilder.h"
 #include "quadtree/Strata.h"
@@ -235,8 +236,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
         for (Box *box : strata[static_cast<std::size_t>(i)]) {
             if (!box->has_child_boxes)
                 continue;
-            for (auto &child_ptr : box->child_boxes) {
-                Box *child = child_ptr.get();
+            for (auto child : box->child_boxes) {
                 if (child == nullptr)
                     continue;
                 std::complex<double> z_0(child->centre.x - box->centre.x,
@@ -380,8 +380,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
             if (!box->has_child_boxes)
                 continue;
             std::complex<double> centre(box->centre.x, box->centre.y);
-            for (auto &child_ptr : box->child_boxes) {
-                Box *child = child_ptr.get();
+            for (auto child : box->child_boxes) {
                 if (child == nullptr)
                     continue;
                 std::complex<double> z =
@@ -455,8 +454,9 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
         bodies[i].id = i;
     }
 
-    std::unique_ptr<Box> bodies_tree =
-        create_quadtree(bodies, static_cast<std::size_t>(bodies_per_box));
+    BoxAllocator *box_alloc = new BoxAllocator;
+    Box *bodies_tree =
+        create_quadtree(bodies, static_cast<std::size_t>(bodies_per_box), *box_alloc);
     Strata strata = stratify_quadtree(*bodies_tree);
     std::vector<Box *> leaf_boxes = leaves(strata);
     populate_list_1(leaf_boxes);
@@ -475,15 +475,9 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
 
     // rebuild tree based on new particle locations
     auto rebuild_tree = [&]() {
-        std::vector<Body> flat_bodies;
-        flat_bodies.reserve(static_cast<std::size_t>(N));
-        for (Box *leaf : leaf_boxes) {
-            for (const Body &body : leaf->bodies_in_box) {
-                flat_bodies.push_back(body);
-            }
-        }
-        bodies_tree = create_quadtree(flat_bodies,
-                                      static_cast<std::size_t>(bodies_per_box));
+        box_alloc->clear_allocator();
+        bodies_tree = create_quadtree(bodies,
+                                      static_cast<std::size_t>(bodies_per_box), *box_alloc);
         strata = stratify_quadtree(*bodies_tree);
         leaf_boxes = leaves(strata);
         populate_list_1(leaf_boxes);
@@ -591,6 +585,7 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
             }
 
             time_remaining -= dt_sub;
+            //std::cout << "Substep: " << dt_sub << std::endl;
 
             ++steps_since_rebuild;
             if (steps_since_rebuild >= rebuild_every) {
@@ -610,7 +605,7 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
 
             const auto avg = avg_step_time / live_view->frame_stride;
             avg_step_time = std::chrono::duration<double>(0.);
-            std::cout << "Average time per time step for "
+            std::cout << "Average time per time step at step " << step << " for "
                       << live_view->frame_stride << " steps is " << avg
                       << std::endl;
         }

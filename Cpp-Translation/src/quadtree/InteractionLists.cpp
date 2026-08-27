@@ -24,15 +24,14 @@ void populate_list_2(const Strata &strata) {
             std::vector<Box *> colleague_children;
             for (Box *colleague : box->colleagues) {
                 if (colleague != nullptr && colleague->has_child_boxes) {
-                    for (auto &cc : colleague->child_boxes) {
-                        colleague_children.push_back(cc.get());
+                    for (auto cc : colleague->child_boxes) {
+                        colleague_children.push_back(cc);
                     }
                 } else {
                     colleague_children.push_back(nullptr);
                 }
             }
-            for (auto &child_ptr : box->child_boxes) {
-                Box *child = child_ptr.get();
+            for (auto child : box->child_boxes) {
                 if (child == nullptr)
                     continue;
                 for (Box *candidate : colleague_children) {
@@ -66,8 +65,8 @@ namespace {
 std::vector<Box *> collect_w_descendants(Box *origin_leaf, Box *box,
                                          const std::set<int> &qualifying) {
     std::vector<Box *> result;
-    for (int i = 0; i < 4; ++i) {
-        Box *child = box->child_boxes[static_cast<std::size_t>(i)].get();
+    for (size_t i = 0; i < 4; ++i) {
+        Box *child = box->child_boxes[i];
         if (child == nullptr)
             continue;
         if (qualifying.count(i) || !child->has_child_boxes) {
@@ -88,12 +87,12 @@ void populate_list_3_and_4(const std::vector<Box *> &leaf_boxes) {
         std::set<int>{0, 2, 3}, std::set<int>{0, 2},    std::set<int>{0, 1, 2},
         std::set<int>{0, 1},    std::set<int>{0, 1, 3}};
     for (Box *box : leaf_boxes) {
-        for (int c = 0; c < 8; ++c) {
-            Box *colleague = box->colleagues[static_cast<std::size_t>(c)];
+        for (size_t c = 0; c < 8; ++c) {
+            Box *colleague = box->colleagues[c];
             if (colleague != nullptr && colleague->has_child_boxes) {
                 std::vector<Box *> found = collect_w_descendants(
                     box, colleague,
-                    kQualifyingSets[static_cast<std::size_t>(c)]);
+                    kQualifyingSets[c]);
                 box->W.insert(found.begin(), found.end());
             }
         }

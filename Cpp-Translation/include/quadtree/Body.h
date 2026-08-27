@@ -1,6 +1,5 @@
 #pragma once
 #include <cstddef>
-#include <vector>
 namespace fmm {
 struct Body {
   public:

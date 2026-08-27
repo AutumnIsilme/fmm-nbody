@@ -1,7 +1,6 @@
 #pragma once
 
 #include <cstddef>
-#include <memory>
 #include <vector>
 
 #include "Body.h"
@@ -10,9 +9,9 @@
 namespace fmm {
 
 void split(Box &box, const std::vector<Body> &bodies,
-           std::size_t bodies_per_box);
+           std::size_t bodies_per_box, BoxAllocator &box_alloc);
 
-std::unique_ptr<Box> create_quadtree(const std::vector<Body> &bodies,
-                                     std::size_t bodies_per_box);
+Box *create_quadtree(const std::vector<Body> &bodies,
+                     std::size_t bodies_per_box, BoxAllocator &box_alloc);
 
 } // namespace fmm
