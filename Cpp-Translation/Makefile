@@ -1,5 +1,5 @@
 CXX      := clang++
-CXXFLAGS := -std=c++23 -Wall -Wextra -O3 -march=native -MMD -MP -Iinclude
+CXXFLAGS := -std=c++23 -g -Wall -Wextra -O3 -march=native -MMD -MP -Iinclude
 LDFLAGS  :=
 
 BUILD_DIR := build
@@ -21,7 +21,7 @@ $(BUILD_DIR)/%.o: src/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Rebuilds everything with sanitizers + debug symbols, no optimization.
-debug: CXXFLAGS := -std=c++17 -Wall -Wextra -g -O0 -fsanitize=address,undefined -Iinclude
+debug: CXXFLAGS := -std=c++23 -Wall -Wextra -g -O0 -fsanitize=address,undefined -Iinclude
 debug: clean $(BIN)
 
 run: $(BIN)

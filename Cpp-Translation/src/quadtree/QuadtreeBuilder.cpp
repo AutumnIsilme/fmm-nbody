@@ -14,7 +14,7 @@ namespace {
 constexpr double kMinBoxExtent = 1e-10;
 } // namespace
 
-void split(Box &box, const std::vector<Body> &bodies,
+void split(Box &box, std::vector<Body *> &bodies,
            std::size_t bodies_per_box, BoxAllocator& box_alloc) {
     const double split_size = box.extent / 2.0;
     // Quadrant roots
@@ -23,7 +23,7 @@ void split(Box &box, const std::vector<Body> &bodies,
                                        box.root + Vec2(0.0, split_size),
                                        box.root + Vec2(split_size, 0.0),
                                        box.root + Vec2(split_size, split_size)};
-    Box* children[4];
+    std::array<Box*, 4> children;
     for (size_t i = 0; i < 4; ++i) {
         Vec2 child_centre = roots[i] +
                             Vec2(split_size, split_size) / 2.0;
@@ -32,15 +32,16 @@ void split(Box &box, const std::vector<Body> &bodies,
                                          split_size, child_centre);
     }
     // Partition bodies by quadrant.
-    std::array<std::vector<Body>, 4> sub_box_bodies;
-    for (const Body &body : bodies) {
-        const double nx = body.x - box.root.x;
-        const double ny = body.y - box.root.y;
+    std::array<std::vector<Body *>, 4> sub_box_bodies;
+    for (Body *body : bodies) {
+        if (!body) continue;
+        const double nx = body->x - box.root.x;
+        const double ny = body->y - box.root.y;
         if (!std::isfinite(nx) || !std::isfinite(ny)) {
             throw std::runtime_error(
-                "split: body id=" + std::to_string(body.id) +
-                " has a non-finite position (x=" + std::to_string(body.x) +
-                ", y=" + std::to_string(body.y) +
+                "split: body id=" + std::to_string(body->id) +
+                " has a non-finite position (x=" + std::to_string(body->x) +
+                ", y=" + std::to_string(body->y) +
                 ") -- likely a force blowup from an unresolved close "
                 "encounter. "
                 "Consider increasing softening (kSofteningSquared in "
@@ -104,13 +105,13 @@ void split(Box &box, const std::vector<Body> &bodies,
     }
 }
 
-Box *create_quadtree(const std::vector<Body> &bodies,
+Box *create_quadtree(std::vector<Body> &bodies,
                                      std::size_t bodies_per_box, BoxAllocator& box_alloc) {
     if (bodies.empty()) {
         const Vec2 box_0_root(-1.0, -1.0);
         const double box_0_extent = 2.0;
-        return new Box(box_0_root, box_0_extent,
-                    box_0_root + Vec2(box_0_extent, box_0_extent) / 2.0);
+        return box_alloc.make_box(Box(box_0_root, box_0_extent,
+                    box_0_root + Vec2(box_0_extent, box_0_extent) / 2.0));
     }
 
     double min_x = -1.;
@@ -118,14 +119,14 @@ Box *create_quadtree(const std::vector<Body> &bodies,
     double min_y = -1.;
     double max_y = 1.;
 
-    // for (const auto &body : bodies) {
-    //     if (std::isfinite(body.x) && std::isfinite(body.y)) {
-    //         min_x = std::min(min_x, body.x);
-    //         max_x = std::max(max_x, body.x);
-    //         min_y = std::min(min_y, body.y);
-    //         max_y = std::max(max_y, body.y);
-    //     }
-    // }
+    for (const auto &body : bodies) {
+        if (std::isfinite(body.x) && std::isfinite(body.y)) {
+            min_x = std::min(min_x, body.x);
+            max_x = std::max(max_x, body.x);
+            min_y = std::min(min_y, body.y);
+            max_y = std::max(max_y, body.y);
+        }
+    }
 
     double width = max_x - min_x;
     double height = max_y - min_y;
@@ -155,13 +156,20 @@ Box *create_quadtree(const std::vector<Body> &bodies,
     Vec2 box_0_root(center_x - 0.5 * extent, center_y - 0.5 * extent);
     double box_0_extent = extent;
 
-    auto box_0 = new Box(box_0_root, box_0_extent,
+    Box *box_0 = box_alloc.make_box();
+    *box_0 = Box(box_0_root, box_0_extent,
                 box_0_root + Vec2(box_0_extent, box_0_extent) / 2.0);
 
+    auto bodies_ptrs = std::vector<Body*>(bodies.size());
+    for (size_t i = 0; i < bodies.size(); i++) {
+        Body *body = &bodies[i];
+        bodies_ptrs.push_back(body);
+    }
+
     if (bodies.size() <= bodies_per_box) {
-        box_0->bodies_in_box = bodies;
+        box_0->bodies_in_box = bodies_ptrs;
     } else {
-        split(*box_0, bodies, bodies_per_box, box_alloc);
+        split(*box_0, bodies_ptrs, bodies_per_box, box_alloc);
         colleagify_quadtree(*box_0);
     }
     return box_0;

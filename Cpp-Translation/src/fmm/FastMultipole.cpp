@@ -25,27 +25,21 @@ namespace fmm {
 
 namespace {
 
-std::vector<std::size_t> remove_escaped_bodies(std::vector<Box *> &leaf_boxes,
+std::vector<std::size_t> remove_escaped_bodies(std::vector<Body> &bodies,
                                                const Vec2 &domain_centre,
                                                double escape_radius_sq) {
+    return {};
     std::vector<std::size_t> removed_ids;
-    for (Box *leaf : leaf_boxes) {
-        std::vector<Body> kept;
-        kept.reserve(leaf->bodies_in_box.size());
-        for (const Body &body : leaf->bodies_in_box) {
-            double dx = body.x - domain_centre.x;
-            double dy = body.y - domain_centre.y;
-            bool finite = std::isfinite(body.x) && std::isfinite(body.y);
-            bool escaped = finite && (dx * dx + dy * dy > escape_radius_sq);
-            if (!finite || escaped) {
-                removed_ids.push_back(body.id);
-            } else {
-                kept.push_back(body);
-            }
-        }
-        if (kept.size() != leaf->bodies_in_box.size()) {
-            leaf->bodies_in_box = std::move(kept);
-        }
+    for (size_t i = 0; i < bodies.size();) {
+        auto& body = bodies[i];
+        double dx = body.x - domain_centre.x;
+        double dy = body.y - domain_centre.y;
+        bool finite = std::isfinite(body.x) && std::isfinite(body.y);
+        bool escaped = finite && (dx * dx + dy * dy > escape_radius_sq);
+        if (!finite || escaped) {
+            removed_ids.push_back(body.id);
+            bodies.erase(std::next(bodies.begin(), i));
+        } else i++;
     }
     return removed_ids;
 }
@@ -87,27 +81,29 @@ double get_cubic_spline_force_factor(std::complex<double> dz, double h) {
     return (3.0 / h_sq) - (2.0 * r / (h_sq * h));
 }
 
-void accumulate_cross_pairwise_forces(const std::vector<Body> &left_bodies,
+void accumulate_cross_pairwise_forces(const std::vector<Body *> &left_bodies,
                                       std::vector<Vec2> &left_forces,
-                                      const std::vector<Body> &right_bodies,
+                                      const std::vector<Body *> &right_bodies,
                                       std::vector<Vec2> &right_forces) {
     for (std::size_t i = 0; i < left_bodies.size(); ++i) {
         for (std::size_t j = 0; j < right_bodies.size(); ++j) {
-            Vec2 force = pairwise_force(left_bodies[i], right_bodies[j]);
+            const Body *left = left_bodies[i];
+            const Body *right = right_bodies[j];
+            Vec2 force = pairwise_force(left, right);
             left_forces[i] = left_forces[i] + force;
             right_forces[j] = right_forces[j] - force;
         }
     }
 }
 
-void accumulate_self_pairwise_forces(const std::vector<Body> &bodies,
+void accumulate_self_pairwise_forces(const std::vector<Body *> &bodies,
                                      std::vector<Vec2> &forces) {
     if (bodies.empty())
         return;
     for (std::size_t i = 0; i + 1 < bodies.size(); ++i) {
         for (std::size_t j = i + 1; j < bodies.size(); ++j) {
-            const Body &left = bodies[i];
-            const Body &right = bodies[j];
+            const Body *left = bodies[i];
+            const Body *right = bodies[j];
             Vec2 force = pairwise_force(left, right);
             forces[i] = forces[i] + force;
             forces[j] = forces[j] - force;
@@ -166,13 +162,13 @@ class LiveWriter {
 //     return result;
 // }
 
-Vec2 pairwise_force(const Body &left, const Body &right) {
-    std::complex<double> dz(right.x - left.x, right.y - left.y);
+Vec2 pairwise_force(const Body *left, const Body *right) {
+    std::complex<double> dz(right->x - left->x, right->y - left->y);
 
     double h = std::sqrt(SimConstants::kSofteningSquared);
     double k = get_cubic_spline_force_factor(dz, h);
 
-    double mass_product = left.mass * right.mass;
+    double mass_product = left->mass * right->mass;
 
     return Vec2(dz.real() * k * mass_product, dz.imag() * k * mass_product);
 }
@@ -191,21 +187,22 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
     }
 
     for (Box *leaf : leaf_boxes) {
-        std::vector<Body> finite_only;
-        finite_only.reserve(leaf->bodies_in_box.size());
-        for (const Body &body : leaf->bodies_in_box) {
-            if (std::isfinite(body.x) && std::isfinite(body.y)) {
-                finite_only.push_back(body);
+        for (size_t i = 0; i < leaf->bodies_in_box.size();) {
+            auto body = leaf->bodies_in_box[i];
+            if (!body) {
+                leaf->bodies_in_box.erase(std::next(leaf->bodies_in_box.begin(), i));
+                continue;
+            }
+            if (std::isfinite(body->x) && std::isfinite(body->y)) {
+                i++;
             } else {
                 std::cerr
-                    << "solve_fmm_forces: body id=" << body.id
+                    << "solve_fmm_forces: body id=" << body->id
                     << " has a non-finite position and was excluded from "
                        "this solve (it should already have been removed by "
                        "remove_escaped_bodies)\n";
+                leaf->bodies_in_box.erase(std::next(leaf->bodies_in_box.begin(), i));
             }
-        }
-        if (finite_only.size() != leaf->bodies_in_box.size()) {
-            leaf->bodies_in_box = std::move(finite_only);
         }
     }
 
@@ -215,10 +212,10 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
 
     // --- Step 2.1 ---
     for (Box *leaf : leaf_boxes) {
-        for (const Body &body : leaf->bodies_in_box) {
-            std::complex<double> z_i(body.x - leaf->centre.x,
-                                     body.y - leaf->centre.y);
-            double mass = body.mass;
+        for (const Body *body : leaf->bodies_in_box) {
+            std::complex<double> z_i(body->x - leaf->centre.x,
+                                     body->y - leaf->centre.y);
+            double mass = body->mass;
             leaf->multipole_expansion[0] += mass;
             std::complex<double> z_pow(1.0, 0.0);
             for (size_t k = 1; k <= p; ++k) {
@@ -233,7 +230,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
 
     // --- Step 2.2 ---
     for (size_t i = strata.size() - 2; i >= 2; --i) {
-        for (Box *box : strata[static_cast<std::size_t>(i)]) {
+        for (Box *box : strata[i]) {
             if (!box->has_child_boxes)
                 continue;
             for (auto child : box->child_boxes) {
@@ -324,8 +321,8 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
     // --- Step 5 ---
     for (Box *leaf : leaf_boxes) {
         for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
-            const Body &body = leaf->bodies_in_box[i];
-            std::complex<double> z(body.x, body.y);
+            const Body *body = leaf->bodies_in_box[i];
+            std::complex<double> z(body->x, body->y);
             for (Box *box : leaf->W) {
                 // Inside Step 5 (evaluating List 3 multipoles directly on leaf
                 // particles)
@@ -344,7 +341,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                 }
 
                 leaf->forces[i] = leaf->forces[i] +
-                                  Vec2(-force.real(), force.imag()) * body.mass;
+                                  Vec2(-force.real(), force.imag()) * body->mass;
             }
         }
     }
@@ -358,10 +355,10 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                 continue;
             std::complex<double> centre(box->centre.x, box->centre.y);
             for (Box *big_leaf : box->X) {
-                for (const Body &body : big_leaf->bodies_in_box) {
+                for (const Body *body : big_leaf->bodies_in_box) {
                     std::complex<double> z =
-                        std::complex<double>(body.x, body.y) - centre;
-                    double mass = body.mass;
+                        std::complex<double>(body->x, body->y) - centre;
+                    double mass = body->mass;
                     box->local_expansion[0] += mass * std::log(-z);
                     for (size_t l = 1; l <= p; ++l) {
                         box->local_expansion[l] -=
@@ -403,9 +400,9 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
     for (Box *leaf : leaf_boxes) {
         std::complex<double> centre(leaf->centre.x, leaf->centre.y);
         for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
-            const Body &body = leaf->bodies_in_box[i];
+            const Body *body = leaf->bodies_in_box[i];
             std::complex<double> z =
-                std::complex<double>(body.x, body.y) - centre;
+                std::complex<double>(body->x, body->y) - centre;
             std::complex<double> force(0.0, 0.0);
             for (size_t l = 1; l <= p; ++l) {
                 force += static_cast<double>(l) *
@@ -413,13 +410,13 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                          std::pow(z, l - 1);
             }
             leaf->forces[i] =
-                leaf->forces[i] + Vec2(-force.real(), force.imag()) * body.mass;
+                leaf->forces[i] + Vec2(-force.real(), force.imag()) * body->mass;
         }
     }
 
     auto solve_forces_step_8 = Clock::now();
 
-    std::cout << "1: " << solve_forces_step_1 - solve_forces_start
+    /*std::cout << "1: " << solve_forces_step_1 - solve_forces_start
               << ", 2.1: " << solve_forces_step_2_1 - solve_forces_step_1
               << ", 2.2: " << solve_forces_step_2_2 - solve_forces_step_2_1
               << ", 3: " << solve_forces_step_3 - solve_forces_step_2_2
@@ -429,7 +426,7 @@ void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
               << ", 7: " << solve_forces_step_7 - solve_forces_step_6
               << ", 8: " << solve_forces_step_8 - solve_forces_step_7
               << ", total: " << solve_forces_step_8 - solve_forces_start
-              << std::endl;
+              << std::endl;*/
 }
 
 // Each step:
@@ -468,8 +465,8 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
 
     std::vector<double> masses(static_cast<std::size_t>(N), 0.0);
     for (Box *leaf : leaf_boxes) {
-        for (const Body &body : leaf->bodies_in_box) {
-            masses[body.id] = body.mass;
+        for (const Body *body : leaf->bodies_in_box) {
+            masses[body->id] = body->mass;
         }
     }
 
@@ -498,6 +495,7 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
 
     int steps_since_rebuild = 0;
     int steps_since_live = 0;
+    int steps_since_perf = 0;
 
     std::chrono::duration<double> avg_step_time(0);
 
@@ -514,14 +512,14 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
             bool saw_nonfinite_accel = false;
             for (Box *leaf : leaf_boxes) {
                 for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
-                    const Body &body = leaf->bodies_in_box[i];
-                    Vec2 accel = leaf->forces[i] * (1.0 / masses[body.id]);
+                    const Body *body = leaf->bodies_in_box[i];
+                    Vec2 accel = leaf->forces[i] * (1.0 / masses[body->id]);
                     double accel_sq = accel.x * accel.x + accel.y * accel.y;
                     if (std::isfinite(accel_sq)) {
                         max_accel_sq = std::max(max_accel_sq, accel_sq);
                     } else {
                         std::cerr
-                            << "step " << step << ": body id=" << body.id
+                            << "step " << step << ": body id=" << body->id
                             << " has a non-finite acceleration this substep; "
                                "forcing the minimum substep\n";
                         saw_nonfinite_accel = true;
@@ -553,13 +551,13 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
 
             for (Box *leaf : leaf_boxes) {
                 for (std::size_t i = 0; i < leaf->bodies_in_box.size(); ++i) {
-                    Body &body = leaf->bodies_in_box[i];
-                    std::size_t id = body.id;
+                    Body *body = leaf->bodies_in_box[i];
+                    std::size_t id = body->id;
                     Vec2 accel = leaf->forces[i] * (1.0 / masses[id]);
                     double accel_sq = accel.x * accel.x + accel.y * accel.y;
 
                     if (!std::isfinite(accel_sq)) {
-                        body.set_position(
+                        body->set_position(
                             std::numeric_limits<double>::quiet_NaN(),
                             std::numeric_limits<double>::quiet_NaN());
                         continue;
@@ -567,8 +565,8 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
 
                     velocities[id] = velocities[id] + (accel * dt_sub);
                     Vec2 displacement = velocities[id] * dt_sub;
-                    body.set_position(body.x + displacement.x,
-                                      body.y + displacement.y);
+                    body->set_position(body->x + displacement.x,
+                                      body->y + displacement.y);
                 }
             }
 
@@ -577,7 +575,7 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
                 Vec2(bodies_tree->extent, bodies_tree->extent) / 2.0;
             double escape_radius =
                 SimConstants::kEscapeRadiusMultiplier * bodies_tree->extent;
-            auto removed = remove_escaped_bodies(leaf_boxes, domain_centre,
+            auto removed = remove_escaped_bodies(bodies, domain_centre,
                                                  escape_radius * escape_radius);
             for (std::size_t id : removed) {
                 std::cerr << "body id=" << id << " escaped the domain at step "
@@ -602,12 +600,18 @@ void run_fmm_simulation(int N, int bodies_per_box, double epsilon,
             steps_since_live >= live_view->frame_stride) {
             live_writer->write(*bodies_tree, show_boxes);
             steps_since_live = 0;
+            
+        }
+        ++steps_since_perf;
+        if (live_writer != nullptr &&
+            steps_since_perf >= live_view->perf_stride) {
+            steps_since_perf = 0;
 
-            const auto avg = avg_step_time / live_view->frame_stride;
-            avg_step_time = std::chrono::duration<double>(0.);
+            const auto avg = avg_step_time / live_view->perf_stride;
             std::cout << "Average time per time step at step " << step << " for "
-                      << live_view->frame_stride << " steps is " << avg
-                      << std::endl;
+                << live_view->perf_stride << " steps is " << avg << ", total time is " << avg_step_time
+                << std::endl;
+            avg_step_time = std::chrono::duration<double>(0.);
         }
     }
 

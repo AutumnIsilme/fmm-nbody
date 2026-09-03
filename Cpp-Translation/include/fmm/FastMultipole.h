@@ -10,7 +10,7 @@ namespace fmm {
 std::vector<Body>
 bodies_from_rows(const std::vector<std::vector<double>> &rows);
 
-Vec2 pairwise_force(const Body &left, const Body &right);
+Vec2 pairwise_force(const Body *left, const Body *right);
 
 void solve_fmm_forces(Strata &strata, std::vector<Box *> &leaf_boxes,
                       double epsilon = 1e-7);

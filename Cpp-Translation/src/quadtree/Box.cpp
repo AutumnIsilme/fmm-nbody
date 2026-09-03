@@ -58,6 +58,13 @@ Box *BoxAllocator::make_box() {
     return box;
 }
 
+Box *BoxAllocator::make_box(Box data) {
+    Box *box = &boxes[alloc_point];
+    *box = std::move(data);
+    alloc_point++;
+    return box;
+}
+
 void BoxAllocator::clear_allocator() {
     alloc_point = 0;
 }

@@ -24,6 +24,7 @@ void print_usage(const char *prog_name) {
            "rendering \n"
         << "  -f, --frame-stride          Set frame stride for output "
            "(default: 1)\n"
+        << "  -p, --perf-stride           Set frame stride for performance output."
         << "  -h, --help                  Show this help message and exit\n";
 }
 
@@ -37,6 +38,7 @@ int main(int argc, char **argv) {
     int rebuild_every = 1;
     bool show_boxes = false;
     int frame_stride = 1;
+    int perf_stride = 1;
 
     // Parse command line arguments
     for (int i = 1; i < argc; ++i) {
@@ -63,6 +65,8 @@ int main(int argc, char **argv) {
             show_boxes = true;
         } else if ((arg == "-f" || arg == "--frame-stride") && i + 1 < argc) {
             frame_stride = std::stoi(argv[++i]);
+        } else if ((arg == "-p" || arg == "--perf-stride") && i + 1 < argc) {
+            perf_stride = std::stoi(argv[++i]);
         } else {
             std::cerr << "Unrecognized or incomplete argument: " << arg << "\n";
             print_usage(argv[0]);
@@ -79,6 +83,8 @@ int main(int argc, char **argv) {
               << "  Epsilon            : " << epsilon << "\n"
               << "  Simulation Steps   : " << num_steps << "\n"
               << "  Time Step (dt)     : " << dt << "\n"
+              << "  Frame Stride       : " << frame_stride << "\n"
+              << "  Perf Stride        : " << perf_stride << "\n"
               << "  Rebuild Frequency  : Every " << rebuild_every
               << " step(s)\n"
               << "  Render Quadtree    : "
@@ -88,6 +94,7 @@ int main(int argc, char **argv) {
     LiveViewSettings live;
     live.output_path = "live.svg";
     live.frame_stride = frame_stride;
+    live.perf_stride = perf_stride;
     live.show_boxes = show_boxes;
 
     fmm::run_fmm_simulation(N, bodies_per_box, epsilon, num_steps, dt,

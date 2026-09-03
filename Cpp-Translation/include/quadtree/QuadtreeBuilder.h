@@ -11,7 +11,7 @@ namespace fmm {
 void split(Box &box, const std::vector<Body> &bodies,
            std::size_t bodies_per_box, BoxAllocator &box_alloc);
 
-Box *create_quadtree(const std::vector<Body> &bodies,
+Box *create_quadtree(std::vector<Body> &bodies,
                      std::size_t bodies_per_box, BoxAllocator &box_alloc);
 
 } // namespace fmm

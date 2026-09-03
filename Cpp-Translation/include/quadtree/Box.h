@@ -26,9 +26,9 @@ class Box {
     // 0 = (root),                   1 = (root + (0, split_size)),
     // 2 = (root + (split_size, 0)), 3 = (root + (split_size, split_size)).
     // A null entry means that quadrant held no bodies and was pruned
-    Box *child_boxes[4];
+    std::array<Box *, 4> child_boxes;
 
-    std::vector<Body> bodies_in_box;
+    std::vector<Body *> bodies_in_box;
 
     // Same-level neighbour boxes.
     std::array<Box *, 8> colleagues;
@@ -70,6 +70,7 @@ struct BoxAllocator {
 
     void clear_allocator();
     Box *make_box();
+    Box *make_box(Box data);
 
   private:
     size_t alloc_point = 0;
